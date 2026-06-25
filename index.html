@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patron — Agentic Pattern Composer</title>
+    <link rel="stylesheet" href="vendor/litegraph/litegraph.css" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <span class="brand">Patron <small>· agentic GoF composer</small></span>
+      <div class="actions">
+        <button id="btn-run" title="Run one execution pass">▶ Run</button>
+        <button id="btn-reset" title="Reload the demo composition">↺ Reset demo</button>
+        <button id="btn-clear" title="Empty the canvas">✕ Clear</button>
+      </div>
+    </header>
+
+    <div id="layout">
+      <aside id="toolbox">
+        <h2>Toolbox</h2>
+        <p class="hint">Drag a pattern onto the canvas, or double-click the canvas to search.</p>
+        <div id="palette"><!-- populated by app.js --></div>
+      </aside>
+
+      <main id="canvas-wrap">
+        <canvas id="graph-canvas" tabindex="1"></canvas>
+      </main>
+
+      <aside id="panel">
+        <h2>Inspector output</h2>
+        <pre id="inspect-out">Run the graph to see data flow…</pre>
+      </aside>
+    </div>
+
+    <!-- vendored library -->
+    <script src="vendor/litegraph/litegraph.js"></script>
+    <!-- pattern node definitions (implements the data spec) -->
+    <script src="js/patterns.js"></script>
+    <!-- app bootstrap + demo wiring -->
+    <script src="js/app.js"></script>
+  </body>
+</html>
