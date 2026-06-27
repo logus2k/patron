@@ -5,6 +5,27 @@
   --text: #d8d9de;
   --muted: #8b8d96;
   --accent: #4a90d9;
+  --btn-bg: #31333a;
+  --btn-bg-hover: #3a3d45;
+  --item-bg: #2d2f35;
+  --item-bg-hover: #34363d;
+  --code: #bbccdd;
+  --run: #bfe7bf;
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --panel-border: #d8dee6;
+  --text: #1c2530;
+  --muted: #69788a;
+  --accent: #1f6fd6;
+  --btn-bg: #eef1f5;
+  --btn-bg-hover: #e3e8ee;
+  --item-bg: #f0f3f7;
+  --item-bg-hover: #e7ecf2;
+  --code: #24506e;
+  --run: #1f7a3d;
 }
 
 * { box-sizing: border-box; }
@@ -17,6 +38,7 @@ html, body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   font-size: 14px;
   overflow: hidden;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 /* ---- top bar ---- */
@@ -31,8 +53,9 @@ html, body {
 }
 #topbar .brand { font-weight: 600; letter-spacing: 0.3px; }
 #topbar .brand small { color: var(--muted); font-weight: 400; }
+#topbar .actions { display: flex; align-items: center; flex-wrap: wrap; }
 #topbar .actions button {
-  background: #31333a;
+  background: var(--btn-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
@@ -41,13 +64,15 @@ html, body {
   cursor: pointer;
   font-size: 13px;
 }
-#topbar .actions button:hover { background: #3a3d45; border-color: var(--accent); }
-#btn-run { color: #bfe7bf; }
+#topbar .actions button:hover { background: var(--btn-bg-hover); border-color: var(--accent); }
+#topbar .actions .sep { width: 1px; height: 22px; background: var(--panel-border); margin: 0 4px 0 10px; }
+#btn-run { color: var(--run); }
+#btn-theme { min-width: 84px; }
 
-/* ---- 3-column layout ---- */
+/* ---- layout: canvas + output panel (the Toolbox floats via jsPanel) ---- */
 #layout {
   display: grid;
-  grid-template-columns: 220px 1fr 300px;
+  grid-template-columns: 1fr 300px;
   height: calc(100% - 46px);
 }
 
@@ -56,8 +81,13 @@ aside {
   overflow-y: auto;
   padding: 12px;
 }
-#toolbox { border-right: 1px solid var(--panel-border); }
 #panel { border-left: 1px solid var(--panel-border); }
+
+/* ---- floating Toolbox (jsPanel, theme:'none' → themed via our vars) ---- */
+.jsPanel { font-family: inherit; }
+.jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); }
+.jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
+.jsPanel .jsPanel-content { color: var(--text); }
 
 aside h2 {
   font-size: 12px;
@@ -81,7 +111,7 @@ aside h2 {
   gap: 8px;
   padding: 7px 9px;
   margin-bottom: 5px;
-  background: #2d2f35;
+  background: var(--item-bg);
   border: 1px solid var(--panel-border);
   border-left-width: 3px;
   border-radius: 5px;
@@ -89,13 +119,13 @@ aside h2 {
   font-size: 13px;
   user-select: none;
 }
-.palette-item:hover { background: #34363d; }
+.palette-item:hover { background: var(--item-bg-hover); }
 .palette-item:active { cursor: grabbing; }
 .palette-item .swatch {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;
 }
 
-/* ---- canvas ---- */
+/* ---- canvas (litegraph renders its own dark canvas in both themes) ---- */
 #canvas-wrap { position: relative; }
 #graph-canvas { width: 100%; height: 100%; display: block; }
 
@@ -107,5 +137,5 @@ aside h2 {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #bcd;
+  color: var(--code);
 }

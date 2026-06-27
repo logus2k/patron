@@ -5,41 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Patron — Agentic Pattern Composer</title>
     <link rel="stylesheet" href="vendor/litegraph/litegraph.css" />
+    <link rel="stylesheet" href="vendor/jspanel/jspanel.min.css" />
     <link rel="stylesheet" href="css/app.css" />
+    <!-- Apply the saved theme before paint to avoid a flash (light is default). -->
+    <script>
+      document.documentElement.dataset.theme =
+        localStorage.getItem("patron-theme") || "light";
+    </script>
   </head>
   <body>
     <header id="topbar">
       <span class="brand">Patron <small>· agentic GoF composer</small></span>
       <div class="actions">
-        <button id="btn-run" title="Run one execution pass">▶ Run</button>
-        <button id="btn-reset" title="Reload the demo composition">↺ Reset demo</button>
+        <button id="btn-news" title="Load the News Agent (runtime-aligned nodes)">🗞 News Agent</button>
+        <button id="btn-compile" title="Lower the current graph to the runtime DSL (draft)">⚙ Compile → DSL</button>
+        <button id="btn-save" title="Save the current graph to this browser">💾 Save</button>
+        <button id="btn-load" title="Load the saved graph">📂 Load</button>
+        <span class="sep"></span>
+        <button id="btn-run" title="Run one execution pass (GoF demo)">▶ Run</button>
+        <button id="btn-reset" title="Reload the GoF demo composition">↺ Demo</button>
         <button id="btn-clear" title="Empty the canvas">✕ Clear</button>
+        <span class="sep"></span>
+        <button id="btn-theme" title="Toggle light/dark theme">🌙 dark</button>
       </div>
     </header>
 
     <div id="layout">
-      <aside id="toolbox">
-        <h2>Toolbox</h2>
-        <p class="hint">Drag a pattern onto the canvas (or double-click an item to drop it). Press <b>▶ Run</b> for one execution pass.</p>
-        <div id="palette"><!-- populated by app.js --></div>
-        <p class="hint">Demo tip: the Task Source defaults to <b>high</b> complexity → the chain resolves &amp; the guardrail approves. Set it to <b>low/medium</b> to watch the Chain <i>escalate</i>, or put <code>rm -rf</code> in the instruction to watch the Proxy <i>reject</i>.</p>
-      </aside>
-
       <main id="canvas-wrap">
         <canvas id="graph-canvas" tabindex="1"></canvas>
       </main>
 
       <aside id="panel">
-        <h2>Inspector output</h2>
-        <pre id="inspect-out">Run the graph to see data flow…</pre>
+        <h2>Output</h2>
+        <pre id="inspect-out">Drag blocks from the floating Toolbox. Press ⚙ Compile → DSL to lower the graph.</pre>
       </aside>
     </div>
 
-    <!-- vendored library -->
+    <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>
-    <!-- pattern node definitions (implements the data spec) -->
+    <script src="vendor/jspanel/jspanel.min.js"></script>
+    <!-- GoF pattern nodes (conceptual inspiration) -->
     <script src="js/patterns.js"></script>
-    <!-- app bootstrap + demo wiring -->
+    <!-- runtime-aligned agent nodes (the real authoring vocabulary) -->
+    <script src="js/agent_nodes.js"></script>
+    <!-- draft compiler: graph -> runtime DSL (provisional, re-pointed when the DSL hardens) -->
+    <script src="js/compile.js"></script>
+    <!-- app bootstrap + wiring -->
     <script src="js/app.js"></script>
   </body>
 </html>

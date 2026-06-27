@@ -10,24 +10,28 @@
     return;
   }
 
-  // Register the pattern nodes and grab the type paths back.
+  // Register both node sets: the runtime-aligned agent vocabulary (the real
+  // authoring target) and the GoF demo nodes (conceptual inspiration).
+  global.PatronAgentNodes.register(LiteGraph);
   global.PatronPatterns.register(LiteGraph);
   const COLORS = global.PatronPatterns.CATEGORY_COLORS;
 
-  // Palette definition: display metadata for the toolbox (order matters).
+  // Palette definition: display metadata for the toolbox. Agent vocabulary first.
   const PALETTE = [
-    { group: "Utility", color: COLORS.Utility, items: [
+    global.PatronAgentNodes.PALETTE,
+    global.PatronAgentNodes.DESTINATIONS,
+    { group: "GoF demo · Utility", color: COLORS.Utility, items: [
       { type: "patron/task_source", label: "Task Source" },
       { type: "patron/inspector", label: "Inspector" },
     ]},
-    { group: "Creational", color: COLORS.Creational, items: [
+    { group: "GoF demo · Creational", color: COLORS.Creational, items: [
       { type: "patron/builder", label: "Builder Agent" },
       { type: "patron/factory", label: "Factory Agent" },
     ]},
-    { group: "Structural", color: COLORS.Structural, items: [
+    { group: "GoF demo · Structural", color: COLORS.Structural, items: [
       { type: "patron/proxy", label: "Proxy Agent" },
     ]},
-    { group: "Behavioral", color: COLORS.Behavioral, items: [
+    { group: "GoF demo · Behavioral", color: COLORS.Behavioral, items: [
       { type: "patron/chain_of_responsibility", label: "Chain of Responsibility" },
     ]},
   ];
@@ -58,8 +62,9 @@
   };
 
   // --- palette UI + drag-to-canvas -----------------------------------------
-  function buildPalette() {
-    const root = document.getElementById("palette");
+  function buildPalette(root) {
+    root = root || document.getElementById("palette");
+    if (!root) return;
     root.innerHTML = "";
     PALETTE.forEach((grp) => {
       const g = document.createElement("div");
@@ -164,7 +169,70 @@
     graph.setDirtyCanvas(true, true);
   }
 
+  // --- agent authoring: load / compile / persist ---------------------------
+  const SAVE_KEY = "patron-graph";
+
+  // Build the News Agent from the runtime-aligned nodes (their defaults already
+  // hold the News Agent config — see js/agent_nodes.js).
+  function loadNewsAgent() {
+    graph.clear();
+    for (const k in inspectState) delete inspectState[k];
+    const trig = spawnNode("patron/agent/trigger", [40, 200]);
+    const tools = spawnNode("patron/agent/tools", [40, 360]);
+    const brain = spawnNode("patron/agent/brain", [340, 210]);
+    const deliv = spawnNode("patron/agent/deliver", [640, 240]);
+    const wa = spawnNode("patron/dest/whatsapp", [860, 240]);
+    trig.connect(0, brain, 0);   // task   -> brain.in
+    tools.connect(0, brain, 1);  // tools  -> brain.tools
+    brain.connect(0, deliv, 0);  // result -> deliver
+    deliv.connect(0, wa, 0);     // deliver -> WhatsApp destination
+    graph.setDirtyCanvas(true, true);
+    inspectOut.textContent = "News Agent loaded (Trigger → Brain(+Tools) → Deliver → WhatsApp). Press ⚙ Compile → DSL.";
+  }
+
+  // Lower the current graph to the (draft) runtime DSL and show it.
+  function compileToDsl() {
+    const out = global.PatronCompile.compile(graph.serialize());
+    if (out.ok) {
+      inspectOut.textContent =
+        "// runtime DSL (draft — provisional until agent_runtime hardens it)\n" +
+        JSON.stringify(out.dsl, null, 2);
+    } else {
+      inspectOut.textContent = "// compile errors:\n- " + out.errors.join("\n- ");
+    }
+  }
+
+  function saveLocal() {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(graph.serialize()));
+    inspectOut.textContent = "Saved the graph to this browser.";
+  }
+  function loadLocal() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) { inspectOut.textContent = "No saved graph found."; return; }
+    graph.clear();
+    graph.configure(JSON.parse(raw));
+    graph.setDirtyCanvas(true, true);
+    inspectOut.textContent = "Loaded the saved graph.";
+  }
+
+  // --- theme toggle (persisted; light is default) --------------------------
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    // button shows the theme it switches TO
+    document.getElementById("btn-theme").textContent = theme === "light" ? "🌙 dark" : "☀ light";
+  }
+  applyTheme(localStorage.getItem("patron-theme") || "light");
+  document.getElementById("btn-theme").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    localStorage.setItem("patron-theme", next);
+    applyTheme(next);
+  });
+
   // --- controls -------------------------------------------------------------
+  document.getElementById("btn-news").addEventListener("click", loadNewsAgent);
+  document.getElementById("btn-compile").addEventListener("click", compileToDsl);
+  document.getElementById("btn-save").addEventListener("click", saveLocal);
+  document.getElementById("btn-load").addEventListener("click", loadLocal);
   document.getElementById("btn-run").addEventListener("click", runOnce);
   document.getElementById("btn-reset").addEventListener("click", () => {
     loadDemo();
@@ -173,16 +241,42 @@
   document.getElementById("btn-clear").addEventListener("click", () => {
     graph.clear();
     for (const k in inspectState) delete inspectState[k];
-    inspectOut.textContent = "Canvas cleared. Drag patterns from the toolbox.";
+    inspectOut.textContent = "Canvas cleared. Drag blocks from the toolbox.";
   });
 
+  // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
+  function createToolbox() {
+    if (typeof jsPanel === "undefined") {
+      buildPalette(document.getElementById("palette")); // sidebar fallback
+      return;
+    }
+    jsPanel.create({
+      headerTitle: "🧱 Toolbox",
+      theme: "none",
+      borderRadius: "6px",
+      border: "1px solid var(--panel-border)",
+      panelSize: { width: 252, height: 500 },
+      position: { my: "left-top", at: "left-top", offsetX: 14, offsetY: 58 },
+      boxShadow: 3,
+      headerControls: { minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      addCloseControl: 0,
+      callback: (p) => {
+        p.content.style.cssText = "padding:10px;overflow-y:auto;background:var(--panel);color:var(--text)";
+        const host = document.createElement("div");
+        host.id = "palette";
+        p.content.appendChild(host);
+        buildPalette(host);
+      },
+    });
+  }
+
   // --- boot -----------------------------------------------------------------
-  buildPalette();
+  createToolbox();
   resizeCanvas();
-  loadDemo();
-  // LGraphCanvas renders on its own loop; we do NOT call graph.start() so
-  // execution only happens on demand (Run / Reset). Show data immediately.
-  runOnce();
+  // Boot with the runtime-aligned News Agent (the real direction); the GoF demo
+  // is still available via ↺ Demo. We do NOT call graph.start() (on-demand only).
+  loadNewsAgent();
+  graph.setDirtyCanvas(true, true);
 
   // Expose for console tinkering.
   global.PatronApp.graph = graph;
