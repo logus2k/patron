@@ -123,6 +123,7 @@
     if (!node) return null;
     node.pos = pos;
     graph.add(node);
+    scheduleSave();
     return node;
   }
 
@@ -189,7 +190,11 @@
   }
 
   // --- agent authoring: load / compile / persist ---------------------------
-  const SAVE_KEY = "patron-graph";
+  // Server-side workspace store (serve.py). RELATIVE on purpose so it works both at
+  // the root (http://host:8088/ → /api/workspace) and behind the reverse proxy's
+  // path prefix (https://logus2k.com/patron/ → /patron/api/workspace, which the
+  // proxy strips back to /api/workspace). An absolute "/api/..." would escape /patron/.
+  const API = "api/workspace";
 
   // Build the News Agent from the runtime-aligned nodes (their defaults already
   // hold the News Agent config — see js/agent_nodes.js).
@@ -222,17 +227,89 @@
     showOutput(); // always surface the result
   }
 
-  function saveLocal() {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(graph.serialize()));
-    inspectOut.textContent = "Saved the graph to this browser.";
+  // The workspace document we persist to the server: the graph (which already
+  // carries each node's pos/size) + a separate `ui` metadata block holding panel
+  // rects, the canvas pan/zoom, and the theme. UI metadata never touches the graph.
+  function panelRect(p) {
+    if (!p) return null;
+    const cs = getComputedStyle(p);
+    return {
+      left: p.style.left || cs.left,
+      top: p.style.top || cs.top,
+      width: p.style.width || cs.width,
+      height: p.style.height || cs.height,
+      hidden: p.style.display === "none",
+    };
   }
-  function loadLocal() {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) { inspectOut.textContent = "No saved graph found."; return; }
+  function applyPanelRect(p, r) {
+    if (!p || !r) return;
+    if (r.left) p.style.left = r.left;
+    if (r.top) p.style.top = r.top;
+    if (r.width && r.height && typeof p.resize === "function") {
+      try { p.resize({ width: parseInt(r.width, 10), height: parseInt(r.height, 10) }); }
+      catch (e) { p.style.width = r.width; p.style.height = r.height; }
+    }
+    p.style.display = r.hidden ? "none" : "";
+  }
+  function collectWorkspace() {
+    return {
+      version: 1,
+      graph: graph.serialize(), // includes every node's pos/size (canvas components)
+      ui: {
+        theme: document.documentElement.dataset.theme,
+        view: { offset: lgcanvas.ds.offset.slice(), scale: lgcanvas.ds.scale },
+        panels: { toolbox: panelRect(toolboxPanel), output: panelRect(outputPanel) },
+      },
+    };
+  }
+  function applyWorkspace(ws) {
     graph.clear();
-    graph.configure(JSON.parse(raw));
+    graph.configure(ws.graph || {});
+    const ui = ws.ui || {};
+    if (ui.theme) applyTheme(ui.theme);
+    if (ui.view) {
+      if (Array.isArray(ui.view.offset)) lgcanvas.ds.offset = ui.view.offset.slice();
+      if (ui.view.scale) lgcanvas.ds.scale = ui.view.scale;
+    }
+    const panels = ui.panels || {};
+    applyPanelRect(toolboxPanel, panels.toolbox);
+    applyPanelRect(outputPanel, panels.output);
     graph.setDirtyCanvas(true, true);
-    inspectOut.textContent = "Loaded the saved graph.";
+  }
+
+  async function saveWorkspace(opts) {
+    const silent = !!(opts && opts.silent); // background auto-saves don't touch the Output panel
+    try {
+      const res = await fetch(API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectWorkspace()),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!silent) {
+        inspectOut.textContent = res.ok && j.ok
+          ? "Saved to the server (graph + panel positions + view + theme)."
+          : "Save failed: " + (j.error || ("HTTP " + res.status));
+        showOutput();
+      }
+    } catch (e) {
+      if (!silent) {
+        inspectOut.textContent = "Save failed — no server. Run `python3 serve.py` to enable saving.";
+        showOutput();
+      }
+    }
+  }
+  async function loadWorkspace() {
+    try {
+      const res = await fetch(API, { cache: "no-store" });
+      const ws = await res.json().catch(() => ({}));
+      if (!ws || !ws.graph) { inspectOut.textContent = "No saved workspace on the server yet."; showOutput(); return; }
+      applyWorkspace(ws);
+      inspectOut.textContent = "Loaded the workspace from the server.";
+    } catch (e) {
+      inspectOut.textContent = "Load failed — no server. Run `python3 serve.py` to enable loading.";
+    }
+    showOutput();
   }
 
   // --- canvas "millimetric paper" theming ----------------------------------
@@ -310,18 +387,18 @@
     document.getElementById("btn-theme").textContent = theme === "light" ? "🌙 dark" : "☀ light";
     themeGraph(); // recolor the graph paper + the nodes drawn on it
   }
-  applyTheme(localStorage.getItem("patron-theme") || "light");
+  applyTheme("light"); // default; the chosen theme persists as workspace metadata (Save), not localStorage
   document.getElementById("btn-theme").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-    localStorage.setItem("patron-theme", next);
     applyTheme(next);
+    scheduleSave();
   });
 
   // --- controls -------------------------------------------------------------
   document.getElementById("btn-news").addEventListener("click", loadNewsAgent);
   document.getElementById("btn-compile").addEventListener("click", compileToDsl);
-  document.getElementById("btn-save").addEventListener("click", saveLocal);
-  document.getElementById("btn-load").addEventListener("click", loadLocal);
+  document.getElementById("btn-save").addEventListener("click", saveWorkspace);
+  document.getElementById("btn-load").addEventListener("click", loadWorkspace);
   document.getElementById("btn-run").addEventListener("click", runOnce);
   document.getElementById("btn-reset").addEventListener("click", () => {
     loadDemo();
@@ -334,12 +411,13 @@
   });
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
+  let toolboxPanel = null;
   function createToolbox() {
     if (typeof jsPanel === "undefined") {
       buildPalette(document.getElementById("palette")); // sidebar fallback
       return;
     }
-    jsPanel.create({
+    toolboxPanel = jsPanel.create({
       headerTitle: "🧱 Toolbox",
       theme: "none",
       borderRadius: "6px",
@@ -400,10 +478,44 @@
   createOutputPanel();
   document.getElementById("btn-output").addEventListener("click", toggleOutput);
   resizeCanvas();
-  // Boot with the runtime-aligned News Agent (the real direction); the GoF demo
-  // is still available via ↺ Demo. We do NOT call graph.start() (on-demand only).
-  loadNewsAgent();
-  graph.setDirtyCanvas(true, true);
+
+  // Auto-persistence (server-side): load the saved workspace on start and save
+  // automatically as things change — so the explicit 💾 Save is optional. The
+  // `appReady` guard keeps the initial load from triggering a save over itself.
+  let appReady = false;
+  let saveTimer = 0;
+  function scheduleSave() {
+    if (!appReady) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveWorkspace({ silent: true }), 700);
+  }
+  lgcanvas.onNodeMoved = scheduleSave;                 // dragging a node
+  document.addEventListener("pointerup", scheduleSave); // end of a panel drag/resize, link, etc.
+  // Capture the very latest state right before a reload/close (keepalive lets the
+  // request finish during unload) — so a hard refresh keeps your positions.
+  global.addEventListener("beforeunload", () => {
+    try {
+      fetch(API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectWorkspace()),
+        keepalive: true,
+      });
+    } catch (e) { /* ignore */ }
+  });
+
+  (async function boot() {
+    let loaded = false;
+    try {
+      const res = await fetch(API, { cache: "no-store" });
+      const ws = await res.json().catch(() => ({}));
+      if (ws && ws.graph) { applyWorkspace(ws); loaded = true; }
+    } catch (e) { /* no server → start fresh */ }
+    // First run (no saved workspace): boot the runtime-aligned News Agent.
+    if (!loaded) loadNewsAgent();
+    graph.setDirtyCanvas(true, true);
+    appReady = true;
+  })();
 
   // Expose for console tinkering.
   global.PatronApp.graph = graph;
