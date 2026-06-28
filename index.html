@@ -15,7 +15,7 @@
   </head>
   <body>
     <header id="topbar">
-      <span class="brand">Patron <small>· agentic GoF composer</small></span>
+      <span class="brand">Patron</span>
       <div class="actions">
         <button id="btn-news" title="Load the News Agent (runtime-aligned nodes)">🗞 News Agent</button>
         <button id="btn-compile" title="Lower the current graph to the runtime DSL (draft)">⚙ Compile → DSL</button>
@@ -26,20 +26,15 @@
         <button id="btn-reset" title="Reload the GoF demo composition">↺ Demo</button>
         <button id="btn-clear" title="Empty the canvas">✕ Clear</button>
         <span class="sep"></span>
+        <button id="btn-output" title="Show/hide the Output panel">📄 Output</button>
         <button id="btn-theme" title="Toggle light/dark theme">🌙 dark</button>
       </div>
     </header>
 
-    <div id="layout">
-      <main id="canvas-wrap">
-        <canvas id="graph-canvas" tabindex="1"></canvas>
-      </main>
-
-      <aside id="panel">
-        <h2>Output</h2>
-        <pre id="inspect-out">Drag blocks from the floating Toolbox. Press ⚙ Compile → DSL to lower the graph.</pre>
-      </aside>
-    </div>
+    <!-- the canvas fills the whole screen; the topbar + Toolbox/Output panels float over it -->
+    <main id="canvas-wrap">
+      <canvas id="graph-canvas" tabindex="1"></canvas>
+    </main>
 
     <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>

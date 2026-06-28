@@ -41,16 +41,35 @@
   const canvasEl = document.getElementById("graph-canvas");
   const lgcanvas = new LGraphCanvas(canvasEl, graph);
 
+  // Sizing: let litegraph's own resize() own the canvas bitmap — it reads the
+  // parent size, resizes BOTH the fg + bg canvases, and no-ops when unchanged.
+  // (Pre-setting canvas.width ourselves cleared the bitmap → a flash → and made
+  // resize() think nothing changed, so it skipped the repaint → blank canvas.)
+  // Batch with rAF (resize fires in bursts) and repaint in the same frame so the
+  // cleared bitmap is never shown.
+  let resizePending = false;
   function resizeCanvas() {
-    const wrap = document.getElementById("canvas-wrap");
-    canvasEl.width = wrap.clientWidth;
-    canvasEl.height = wrap.clientHeight;
-    lgcanvas.resize();
+    resizePending = false;
+    lgcanvas.resize();           // sizes fg+bg to the parent; dirties on change
+    lgcanvas.draw(true, true);   // repaint now — no blank frame
   }
-  global.addEventListener("resize", resizeCanvas);
+  function scheduleResize() {
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(resizeCanvas);
+  }
+  global.addEventListener("resize", scheduleResize);
+  // Track the canvas pane itself (catches layout changes, not just window resize).
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(scheduleResize).observe(document.getElementById("canvas-wrap"));
+  }
 
-  // --- inspector side panel hook -------------------------------------------
-  const inspectOut = document.getElementById("inspect-out");
+  // --- output hook ----------------------------------------------------------
+  // The Output is a floating jsPanel (created at boot). We build its <pre> here
+  // so the reference is stable regardless of when/whether the panel is created.
+  const inspectOut = document.createElement("pre");
+  inspectOut.id = "inspect-out";
+  inspectOut.textContent = "Press ⚙ Compile → DSL to lower the graph to the runtime DSL.";
   const inspectState = {};
   global.PatronApp = {
     onInspect(nodeId, value) {
@@ -200,6 +219,7 @@
     } else {
       inspectOut.textContent = "// compile errors:\n- " + out.errors.join("\n- ");
     }
+    showOutput(); // always surface the result
   }
 
   function saveLocal() {
@@ -215,11 +235,80 @@
     inspectOut.textContent = "Loaded the saved graph.";
   }
 
+  // --- canvas "millimetric paper" theming ----------------------------------
+  // litegraph paints its own background canvas — a solid fill (clear_background_color)
+  // plus a repeating grid PNG (background_image) — both independent of our CSS. We
+  // regenerate both from the theme's CSS vars so the graph paper follows light/dark.
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  // A 100px graph-paper tile: minor lines every 20px + a heavier line on the tile
+  // edge (→ a major line every 100px when repeated). Drawn in the theme's colors.
+  function makeGridImage(base, minor, major) {
+    const G = 100, step = 20, c = document.createElement("canvas");
+    c.width = c.height = G;
+    const x = c.getContext("2d");
+    x.fillStyle = base; x.fillRect(0, 0, G, G);
+    x.lineWidth = 1; x.strokeStyle = minor;
+    for (let i = step; i < G; i += step) {
+      x.beginPath(); x.moveTo(i + 0.5, 0); x.lineTo(i + 0.5, G); x.stroke();
+      x.beginPath(); x.moveTo(0, i + 0.5); x.lineTo(G, i + 0.5); x.stroke();
+    }
+    x.strokeStyle = major;
+    x.beginPath(); x.moveTo(0.5, 0); x.lineTo(0.5, G); x.stroke();
+    x.beginPath(); x.moveTo(0, 0.5); x.lineTo(G, 0.5); x.stroke();
+    return c.toDataURL("image/png");
+  }
+  function themeCanvas() {
+    lgcanvas.clear_background_color = cssVar("--canvas-bg", "#1b1c20");
+    lgcanvas.background_image = makeGridImage(
+      cssVar("--canvas-bg", "#1b1c20"),
+      cssVar("--canvas-grid-minor", "#26282d"),
+      cssVar("--canvas-grid-major", "#31333a"),
+    );
+    lgcanvas._bg_img = null;  // force the bg image to reload…
+    lgcanvas._pattern = null; // …and the repeat-pattern to rebuild
+  }
+
+  // The node boxes litegraph draws on the canvas read their colors live from
+  // LiteGraph.* globals (body bg, text, widgets, links) — so theming = swapping
+  // those globals. Node *title bars* keep their per-node category accent (node.color).
+  function themeNodes() {
+    LiteGraph.NODE_DEFAULT_BGCOLOR = cssVar("--node-bg", "#353535");
+    LiteGraph.NODE_DEFAULT_BOXCOLOR = cssVar("--node-box", "#666");
+    LiteGraph.NODE_TEXT_COLOR = cssVar("--node-text", "#aaa");
+    LiteGraph.NODE_TITLE_COLOR = cssVar("--node-title-text", "#ccc");
+    LiteGraph.WIDGET_BGCOLOR = cssVar("--widget-bg", "#222");
+    LiteGraph.WIDGET_OUTLINE_COLOR = cssVar("--widget-outline", "#666");
+    LiteGraph.WIDGET_TEXT_COLOR = cssVar("--widget-text", "#ddd");
+    LiteGraph.WIDGET_SECONDARY_TEXT_COLOR = cssVar("--widget-text2", "#999");
+    LiteGraph.LINK_COLOR = cssVar("--link", "#9aa9a9");
+    // highlight color for edges of a selected node (litegraph hardcodes #FFF →
+    // invisible on light paper; vendor patched to honor this global).
+    LiteGraph.LINK_HIGHLIGHT_COLOR = cssVar("--link-highlight", "#ffffff");
+    // these two are snapshotted onto the canvas instance at construction:
+    lgcanvas.node_title_color = LiteGraph.NODE_TITLE_COLOR;
+    lgcanvas.default_link_color = LiteGraph.LINK_COLOR;
+    // Edges get a hardcoded rgba(0,0,0,0.5) halo (litegraph) — good contrast on
+    // dark paper, but a heavy black outline on light paper. Keep it dark-only;
+    // on light the themed link color carries the edge on its own.
+    lgcanvas.render_connections_border = document.documentElement.dataset.theme !== "light";
+  }
+
+  // Recolor the whole graph surface (paper + nodes) for the active theme.
+  function themeGraph() {
+    themeCanvas();
+    themeNodes();
+    graph.setDirtyCanvas(true, true);
+  }
+
   // --- theme toggle (persisted; light is default) --------------------------
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
     // button shows the theme it switches TO
     document.getElementById("btn-theme").textContent = theme === "light" ? "🌙 dark" : "☀ light";
+    themeGraph(); // recolor the graph paper + the nodes drawn on it
   }
   applyTheme(localStorage.getItem("patron-theme") || "light");
   document.getElementById("btn-theme").addEventListener("click", () => {
@@ -270,8 +359,46 @@
     });
   }
 
+  // --- floating Output panel (jsPanel): compile DSL / status / inspector ----
+  let outputPanel = null;
+  function createOutputPanel() {
+    if (typeof jsPanel === "undefined") {
+      // fallback: pin the <pre> to the corner so output is still visible
+      inspectOut.style.cssText =
+        "position:fixed;right:10px;top:54px;width:340px;max-height:70vh;overflow:auto;z-index:9;display:none;" +
+        "background:var(--panel);border:1px solid var(--panel-border);border-radius:6px;padding:10px";
+      document.body.appendChild(inspectOut);
+      return;
+    }
+    outputPanel = jsPanel.create({
+      headerTitle: "📄 Output",
+      theme: "none",
+      borderRadius: "6px",
+      border: "1px solid var(--panel-border)",
+      panelSize: { width: 360, height: 460 },
+      position: { my: "right-top", at: "right-top", offsetX: -14, offsetY: 58 },
+      boxShadow: 3,
+      headerControls: { minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      addCloseControl: 0,
+      callback: (p) => {
+        p.content.style.cssText = "padding:10px;overflow:auto;background:var(--panel);color:var(--text)";
+        p.content.appendChild(inspectOut);
+      },
+    });
+    outputPanel.style.display = "none"; // hidden by default — opened via 📄 Output / Compile
+  }
+  // The Output panel is a DOM node (jsPanel) — toggle by display; show on demand.
+  function outputEl() { return outputPanel || inspectOut; }
+  function showOutput() { outputEl().style.display = ""; if (outputPanel) outputPanel.front && outputPanel.front(); }
+  function toggleOutput() {
+    const el = outputEl();
+    el.style.display = el.style.display === "none" ? "" : "none";
+  }
+
   // --- boot -----------------------------------------------------------------
   createToolbox();
+  createOutputPanel();
+  document.getElementById("btn-output").addEventListener("click", toggleOutput);
   resizeCanvas();
   // Boot with the runtime-aligned News Agent (the real direction); the GoF demo
   // is still available via ↺ Demo. We do NOT call graph.start() (on-demand only).

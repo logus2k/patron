@@ -21,8 +21,8 @@
       "pos": [40, 360],
       "size": [240, 110],
       "properties": {
-        "server": "noted",
-        "allow": "noted__newsapi_search, noted__fetch_url",
+        "server": "mcp",
+        "allow": "mcp__newsapi_search, mcp__fetch_url",
         "max_rounds": 3
       },
       "outputs": [{ "name": "tools", "type": "tools", "links": [2] }]

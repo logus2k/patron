@@ -42,6 +42,13 @@
 
   const DSL_VERSION = "0.1";
 
+  // Authoring-time validators — kept in sync with agent_runtime/src/agent_runtime/dsl.py.
+  // The runtime loads with extra="forbid" + strict field validators, so a graph that
+  // lowers to a malformed record is REJECTED at load. Mirroring the rules here keeps
+  // Patron's expressible space ⊆ the runtime's executable space (errors aimed at the human).
+  const ID_RE = /^[A-Za-z0-9._:-]+$/; // AgentRecord.id
+  const TOOL_RE = /^[A-Za-z0-9]+__[A-Za-z0-9_]+$/; // Tools.allow entries: <server>__<tool>
+
   function csv(s) {
     return String(s || "")
       .split(",")
@@ -89,6 +96,24 @@
         errors.push(`Brain input_vars is not valid JSON: ${e.message}`);
       }
     }
+
+    // --- value validation (mirrors dsl.py; reject un-lowerable graphs early) -
+    if (trigger) {
+      const id = String(p(trigger).agent_id || "").trim();
+      if (!id) errors.push("Trigger agent_id must not be empty");
+      else if (!ID_RE.test(id))
+        errors.push(`Trigger agent_id '${id}' must match ^[A-Za-z0-9._:-]+$ (no spaces/special chars)`);
+    }
+    if (brain && !String(p(brain).persona || "").trim())
+      errors.push("Brain persona must be a non-empty preset name");
+    if (tools) {
+      const bad = csv(p(tools).allow).filter((name) => !TOOL_RE.test(name));
+      if (bad.length)
+        errors.push(`Tools allow-list entries must match <server>__<tool> (e.g. mcp__web_search); offending: ${bad.join(", ")}`);
+      if (Number(p(tools).max_rounds ?? 3) < 1) errors.push("Tools max_rounds must be >= 1");
+    }
+    if (dest && !String(p(dest).target || "").trim())
+      errors.push("Destination target must be non-empty");
 
     if (errors.length) return { ok: false, errors };
 

@@ -11,6 +11,21 @@
   --item-bg-hover: #34363d;
   --code: #bbccdd;
   --run: #bfe7bf;
+  /* litegraph "millimetric paper" canvas (recolored in JS from these vars) */
+  --canvas-bg: #1b1c20;
+  --canvas-grid-minor: #26282d;
+  --canvas-grid-major: #31333a;
+  /* litegraph nodes drawn on the canvas (bodies, text, widgets, links) */
+  --node-bg: #353535;
+  --node-box: #666666;
+  --node-text: #aaaaaa;
+  --node-title-text: #cccccc;
+  --widget-bg: #222222;
+  --widget-outline: #666666;
+  --widget-text: #dddddd;
+  --widget-text2: #999999;
+  --link: #9aa9a9;
+  --link-highlight: #ffb02e; /* bright amber — pops on dark paper */
 }
 
 :root[data-theme="light"] {
@@ -26,6 +41,19 @@
   --item-bg-hover: #e7ecf2;
   --code: #24506e;
   --run: #1f7a3d;
+  --canvas-bg: #fafbfd;
+  --canvas-grid-minor: #e7ecf2;
+  --canvas-grid-major: #d3dbe5;
+  --node-bg: #ffffff;
+  --node-box: #9fb0c2;
+  --node-text: #2a3340;
+  --node-title-text: #f4f7fa;
+  --widget-bg: #eef2f7;
+  --widget-outline: #c2ccd8;
+  --widget-text: #1c2530;
+  --widget-text2: #5f6f80;
+  --link: #5a7fa6;
+  --link-highlight: #f5520c; /* strong orange — pops on light paper */
 }
 
 * { box-sizing: border-box; }
@@ -41,18 +69,25 @@ html, body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-/* ---- top bar ---- */
+/* ---- top bar: transparent, floats over the full-screen canvas ---- */
 #topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
   height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--panel-border);
+  background: transparent;     /* the canvas shows through */
+  pointer-events: none;        /* empty gaps pass clicks to the canvas… */
 }
-#topbar .brand { font-weight: 600; letter-spacing: 0.3px; }
-#topbar .brand small { color: var(--muted); font-weight: 400; }
+#topbar .brand, #topbar .actions { pointer-events: auto; } /* …only the controls catch them */
+#topbar .brand {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px var(--bg), 0 0 2px var(--bg); /* stay legible over the grid */
+}
 #topbar .actions { display: flex; align-items: center; flex-wrap: wrap; }
 #topbar .actions button {
   background: var(--btn-bg);
@@ -69,34 +104,18 @@ html, body {
 #btn-run { color: var(--run); }
 #btn-theme { min-width: 84px; }
 
-/* ---- layout: canvas + output panel (the Toolbox floats via jsPanel) ---- */
-#layout {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  height: calc(100% - 46px);
+/* ---- layout: the canvas fills the whole screen; everything else floats over it ---- */
+#canvas-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
 }
-
-aside {
-  background: var(--panel);
-  overflow-y: auto;
-  padding: 12px;
-}
-#panel { border-left: 1px solid var(--panel-border); }
 
 /* ---- floating Toolbox (jsPanel, theme:'none' → themed via our vars) ---- */
 .jsPanel { font-family: inherit; }
 .jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); }
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 .jsPanel .jsPanel-content { color: var(--text); }
-
-aside h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--muted);
-  margin: 4px 0 10px;
-}
-.hint { color: var(--muted); font-size: 12px; line-height: 1.4; margin: 0 0 12px; }
 
 /* ---- palette items ---- */
 .palette-group { margin-bottom: 14px; }
@@ -125,8 +144,7 @@ aside h2 {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;
 }
 
-/* ---- canvas (litegraph renders its own dark canvas in both themes) ---- */
-#canvas-wrap { position: relative; }
+/* ---- canvas (litegraph paints its own bg; app.js recolors it per theme) ---- */
 #graph-canvas { width: 100%; height: 100%; display: block; }
 
 /* ---- inspector panel ---- */

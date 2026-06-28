@@ -27,7 +27,7 @@ run("News Agent graph compiles to the expected v0 flat record", () => {
     id: "news-morning-ai",
     trigger: { type: "schedule" },
     brain: { persona: "news_curator", llm: { temperature: 0.3, max_tokens: 1024 } },
-    tools: { server: "noted", allow: ["noted__newsapi_search", "noted__fetch_url"], max_rounds: 3 },
+    tools: { server: "mcp", allow: ["mcp__newsapi_search", "mcp__fetch_url"], max_rounds: 3 },
     input: { template: "Curate the {n} best morning headlines about {topic}.", vars: { n: 5, topic: "AI agents" } },
     delivery: { channel: "whatsapp", target: "351961050313@c.us" },
   });
@@ -84,6 +84,39 @@ run("invalid input_vars JSON -> ok:false", () => {
   ] });
   assert.strictEqual(out.ok, false);
   assert.ok(out.errors.some((e) => /input_vars/.test(e)));
+});
+
+// --- value validation mirrored from agent_runtime/dsl.py -----------------------
+run("agent_id with spaces/special chars -> ok:false (mirrors dsl.py id regex)", () => {
+  const out = compile({ nodes: [
+    { type: "patron/agent/trigger", properties: { agent_id: "News Morning AI" } },
+    { type: "patron/agent/brain", properties: { persona: "p", input_vars: "{}" } },
+    { type: "patron/dest/whatsapp", properties: { target: "x@c.us" } },
+  ] });
+  assert.strictEqual(out.ok, false);
+  assert.ok(out.errors.some((e) => /agent_id/.test(e)), "errors: " + JSON.stringify(out.errors));
+});
+
+run("tools allow entry without <server>__<tool> shape -> ok:false", () => {
+  const out = compile({ nodes: [
+    { type: "patron/agent/trigger", properties: { agent_id: "a" } },
+    { type: "patron/agent/brain", properties: { persona: "p", input_vars: "{}" } },
+    { type: "patron/agent/tools", properties: { server: "mcp", allow: "newsapi_search", max_rounds: 3 } },
+    { type: "patron/dest/whatsapp", properties: { target: "x@c.us" } },
+  ] });
+  assert.strictEqual(out.ok, false);
+  assert.ok(out.errors.some((e) => /<server>__<tool>/.test(e)), "errors: " + JSON.stringify(out.errors));
+});
+
+run("empty persona / empty delivery.target -> ok:false", () => {
+  const out = compile({ nodes: [
+    { type: "patron/agent/trigger", properties: { agent_id: "a" } },
+    { type: "patron/agent/brain", properties: { persona: "", input_vars: "{}" } },
+    { type: "patron/dest/whatsapp", properties: { target: "" } },
+  ] });
+  assert.strictEqual(out.ok, false);
+  assert.ok(out.errors.some((e) => /persona/.test(e)));
+  assert.ok(out.errors.some((e) => /target/.test(e)));
 });
 
 let ok = true;

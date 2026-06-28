@@ -98,8 +98,8 @@
     // --- Tools (Decorator): MCP allow-list attached to the brain --------------
     function Tools() {
       this.addOutput("tools", TYPES.TOOLS);
-      this.addProperty("server", "noted");
-      this.addProperty("allow", "noted__newsapi_search, noted__fetch_url");
+      this.addProperty("server", "mcp");
+      this.addProperty("allow", "mcp__newsapi_search, mcp__fetch_url");
       this.addProperty("max_rounds", 3);
       textW(this, "server");
       textW(this, "allow");
