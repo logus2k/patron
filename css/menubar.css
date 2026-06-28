@@ -1,0 +1,139 @@
+/*
+ * menubar.css — menu bar styling, based on ~/env/assets/noted
+ * (frontend/css/menubar.css). The DESIGN is kept identical to noted (same
+ * spacing, sizes, rounded dropdowns, hover behavior, shortcut/separator
+ * styling), but the colors are driven by Patron's theme vars (css/app.css)
+ * instead of noted's hardcoded dark palette — so the menus render as a WHITE
+ * version under Patron's default light theme (and follow the dark theme too,
+ * matching noted's original look, when toggled).
+ * Re-sync the metrics from noted if the upstream styling changes.
+ */
+
+/* --- container: adapted for Patron's full-screen-canvas topbar --- */
+/* The topbar floats over the canvas with pointer-events:none, so re-enable
+   clicks on the menubar. The menubar fills the space after the brand. */
+#menubar {
+  flex: 1 1 auto;
+  height: 100%;
+  pointer-events: auto;
+  /* noted's menu font, scoped here so it matches without affecting the rest
+     of Patron (falls back to system fonts if Roboto isn't installed). */
+  --font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.menubar {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  user-select: none;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding-left: 8px;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-btn {
+  padding: 2px 8px 1px;
+  margin-right: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.menu-btn:hover,
+.menu-btn.active,
+.menu.open > .menu-btn {
+  background: var(--btn-bg-hover);
+  color: var(--text);
+}
+
+.dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--panel);
+  color: var(--text);
+  border: 0.5px solid var(--panel-border);
+  min-width: 200px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.menu.open > .dropdown {
+  display: block;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  margin: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.menu-item:hover,
+.menu-item.focus {
+  background: var(--item-bg-hover);
+  border-radius: 5px;
+}
+
+.menu-item:hover .shortcut,
+.menu-item.focus .shortcut,
+.menu-item:hover .arrow,
+.menu-item.focus .arrow {
+  color: inherit;
+}
+
+.menu-item.disabled {
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.menubar .separator {
+  height: 0.5px;
+  background: var(--panel-border);
+  margin: 4px 0;
+}
+
+.check {
+  width: 16px;
+  display: inline-block;
+}
+
+.menubar .shortcut {
+  margin-left: 30px;
+  color: var(--muted);
+  margin-right: 12px;
+}
+
+.arrow {
+  margin-left: 20px;
+  width: 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.submenu {
+  display: none;
+  position: absolute;
+  background: var(--panel);
+  color: var(--text);
+  border: 0.5px solid var(--panel-border);
+  min-width: 200px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  border-radius: 5px;
+}
+
+.has-sub {
+  position: relative;
+}

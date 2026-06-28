@@ -82,26 +82,20 @@ html, body {
   background: transparent;     /* the canvas shows through */
   pointer-events: none;        /* empty gaps pass clicks to the canvas… */
 }
-#topbar .brand, #topbar .actions { pointer-events: auto; } /* …only the controls catch them */
+/* brand badge — the "P" logo; re-enables pointer events (empty topbar gaps
+   pass clicks through to the canvas) */
 #topbar .brand {
+  pointer-events: auto;
   font-weight: 600;
-  letter-spacing: 0.3px;
-  text-shadow: 0 1px 2px var(--bg), 0 0 2px var(--bg); /* stay legible over the grid */
-}
-#topbar .actions { display: flex; align-items: center; flex-wrap: wrap; }
-#topbar .actions button {
-  background: var(--btn-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  margin-left: 8px;
-  cursor: pointer;
   font-size: 13px;
+  letter-spacing: 0.3px;
+  color: #000;                 /* keep the "P" black on both light & dark themes */
+  border: 0.5px solid #999999;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background-color: #fdcc65;
+  margin-top: 2px;
 }
-#topbar .actions button:hover { background: var(--btn-bg-hover); border-color: var(--accent); }
-#topbar .actions .sep { width: 1px; height: 22px; background: var(--panel-border); margin: 0 4px 0 10px; }
-#btn-run { color: var(--run); }
 #btn-theme { min-width: 84px; }
 
 /* ---- layout: the canvas fills the whole screen; everything else floats over it ---- */

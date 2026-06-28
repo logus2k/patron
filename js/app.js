@@ -271,6 +271,39 @@
     showOutput(); // always surface the result
   }
 
+  // Deploy: compile, then push the runtime DSL to agent_runtime via serve.py's
+  // bridge (POST api/deploy → PUT /admin/agents/<id>). Live on the next trigger.
+  async function deployToRuntime() {
+    const out = global.PatronCompile.compile(graph.serialize());
+    if (!out.ok) {
+      inspectOut.textContent = "// cannot deploy — fix the compile errors first:\n- " + out.errors.join("\n- ");
+      showOutput();
+      return;
+    }
+    inspectOut.textContent = "Deploying '" + out.dsl.id + "' to agent_runtime…";
+    showOutput();
+    try {
+      const res = await fetch("api/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(out.dsl),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        inspectOut.textContent =
+          "✅ Deployed '" + j.id + "' to agent_runtime (live).\n" +
+          "It will run with these settings on its next trigger.\n\n" +
+          JSON.stringify(out.dsl, null, 2);
+      } else {
+        inspectOut.textContent =
+          "❌ Deploy failed: " + (j.error || ("HTTP " + res.status)) +
+          (j.detail ? "\n\n" + j.detail : "");
+      }
+    } catch (e) {
+      inspectOut.textContent = "❌ Deploy failed — no Patron server. Run `python3 serve.py`.";
+    }
+  }
+
   // The workspace document we persist to the server: the graph (which already
   // carries each node's pos/size) + a separate `ui` metadata block holding panel
   // rects, the canvas pan/zoom, and the theme. UI metadata never touches the graph.
@@ -425,34 +458,73 @@
   }
 
   // --- theme toggle (persisted; light is default) --------------------------
+  // Declared up here so applyTheme() (called before the menu is built) can sync
+  // the "Dark Theme" checkmark via the guard once the menu exists.
+  let menuBar = null;
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
-    // button shows the theme it switches TO
-    document.getElementById("btn-theme").textContent = theme === "light" ? "🌙 dark" : "☀ light";
+    if (menuBar) {
+      menuBar.setContext("isDark", theme === "dark");
+      menuBar.setContext("isLight", theme !== "dark");
+      menuBar.refresh();
+    }
     themeGraph(); // recolor the graph paper + the nodes drawn on it
   }
-  applyTheme("light"); // default; the chosen theme persists as workspace metadata (Save), not localStorage
-  document.getElementById("btn-theme").addEventListener("click", () => {
+  function toggleTheme() {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     applyTheme(next);
     scheduleSave();
-  });
+  }
+  applyTheme("light"); // default; the chosen theme persists as workspace metadata (Save), not localStorage
 
-  // --- controls -------------------------------------------------------------
-  document.getElementById("btn-news").addEventListener("click", loadNewsAgent);
-  document.getElementById("btn-compile").addEventListener("click", compileToDsl);
-  document.getElementById("btn-save").addEventListener("click", saveWorkspace);
-  document.getElementById("btn-load").addEventListener("click", loadWorkspace);
-  document.getElementById("btn-run").addEventListener("click", runOnce);
-  document.getElementById("btn-reset").addEventListener("click", () => {
-    loadDemo();
-    runOnce();
-  });
-  document.getElementById("btn-clear").addEventListener("click", () => {
+  // --- menu bar (replaces the old toolbar buttons) -------------------------
+  function clearCanvas() {
     graph.clear();
     for (const k in inspectState) delete inspectState[k];
     inspectOut.textContent = "Canvas cleared. Drag blocks from the toolbox.";
-  });
+  }
+  function showAbout() {
+    const id = "patron-about-overlay";
+    const existing = document.getElementById(id);
+    if (existing) { existing.remove(); return; }
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;" +
+      "background:rgba(0,0,0,0.45)";
+    const card = document.createElement("div");
+    card.style.cssText =
+      "max-width:420px;background:var(--panel);color:var(--text);border:1px solid var(--panel-border);" +
+      "border-radius:10px;padding:22px 26px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:inherit";
+    card.innerHTML =
+      "<h2 style='margin:0 0 8px'>Patron</h2>" +
+      "<p style='margin:0 0 6px;color:var(--muted)'>Visual authoring front-end for agents.</p>" +
+      "<p style='margin:0;font-size:13px'>Compose a node graph, compile it to the runtime DSL, " +
+      "and deploy to agent_runtime.</p>";
+    overlay.appendChild(card);
+    overlay.addEventListener("click", () => overlay.remove());
+    const onKey = (e) => { if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onKey); } };
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(overlay);
+  }
+
+  menuBar = new MenuBar("#menubar");
+  menuBar.setContext("isDark", document.documentElement.dataset.theme === "dark");
+  menuBar.setContext("isLight", document.documentElement.dataset.theme !== "dark");
+  menuBar.setContext("outputVisible", false);
+  menuBar.model = global.PATRON_MENU;
+  menuBar.render();
+  menuBar.registerCommand("file.clear", clearCanvas);
+  menuBar.registerCommand("file.news", loadNewsAgent);
+  menuBar.registerCommand("file.demo", () => { loadDemo(); runOnce(); });
+  menuBar.registerCommand("file.save", () => saveWorkspace());
+  menuBar.registerCommand("file.load", loadWorkspace);
+  menuBar.registerCommand("build.run", runOnce);
+  menuBar.registerCommand("build.compile", compileToDsl);
+  menuBar.registerCommand("build.deploy", deployToRuntime);
+  menuBar.registerCommand("view.output", toggleOutput);
+  menuBar.registerCommand("view.theme", toggleTheme);
+  menuBar.registerCommand("help.about", showAbout);
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
   let toolboxPanel = null;
@@ -511,16 +583,23 @@
   }
   // The Output panel is a DOM node (jsPanel) — toggle by display; show on demand.
   function outputEl() { return outputPanel || inspectOut; }
-  function showOutput() { outputEl().style.display = ""; if (outputPanel) outputPanel.front && outputPanel.front(); }
+  function syncOutputMenu(visible) {
+    if (menuBar) { menuBar.setContext("outputVisible", visible); menuBar.refresh(); }
+  }
+  function showOutput() {
+    outputEl().style.display = "";
+    if (outputPanel) outputPanel.front && outputPanel.front();
+    syncOutputMenu(true);
+  }
   function toggleOutput() {
     const el = outputEl();
     el.style.display = el.style.display === "none" ? "" : "none";
+    syncOutputMenu(el.style.display !== "none");
   }
 
   // --- boot -----------------------------------------------------------------
   createToolbox();
   createOutputPanel();
-  document.getElementById("btn-output").addEventListener("click", toggleOutput);
   resizeCanvas();
 
   // Auto-persistence (server-side): load the saved workspace on start and save
