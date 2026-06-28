@@ -80,6 +80,10 @@
   };
 
   const lgcanvas = new LGraphCanvas(canvasEl, graph);
+  // litegraph strokes a #235 rectangle around the whole canvas (visible as a
+  // frame when panning the diagram); the full-screen surface looks cleaner
+  // without it.
+  lgcanvas.render_canvas_border = false;
 
   // Sizing: let litegraph's own resize() own the canvas bitmap — it reads the
   // parent size, resizes BOTH the fg + bg canvases, and no-ops when unchanged.
