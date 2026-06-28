@@ -39,6 +39,46 @@
   // --- graph + canvas -------------------------------------------------------
   const graph = new LGraph();
   const canvasEl = document.getElementById("graph-canvas");
+
+  // --- HiDPI fix (PATRON) ---------------------------------------------------
+  // LiteGraph sizes its canvas bitmap in CSS pixels and lets CSS stretch it to
+  // fill the element. On a HiDPI / scaled display (devicePixelRatio > 1 — the
+  // norm on Windows/WSL with display scaling) that upscaling blurs the whole
+  // graph surface, while the DOM chrome (toolbar/panels) stays crisp because
+  // it isn't a bitmap. Fix it WITHOUT editing the vendored library:
+  //   1) make the backing store devicePixelRatio× larger (real device pixels)
+  //      while keeping the element's CSS layout size unchanged, and
+  //   2) prepend a matching dpr scale to the per-frame draw transform.
+  // Mouse mapping is unaffected: hit-testing goes through convertCanvasToOffset
+  // (`pos/scale - offset`), which works purely in CSS pixels and never sees dpr.
+  // Installed on the prototypes BEFORE constructing the canvas so even the
+  // first frame is sharp. Re-apply if litegraph is re-vendored.
+  const DPR = Math.max(1, global.devicePixelRatio || 1);
+
+  const _toCanvasContext = LiteGraph.DragAndScale.prototype.toCanvasContext;
+  LiteGraph.DragAndScale.prototype.toCanvasContext = function (ctx) {
+    ctx.scale(DPR, DPR);               // CSS px -> device px (outermost)
+    _toCanvasContext.call(this, ctx);  // then litegraph's own pan/zoom
+  };
+
+  LGraphCanvas.prototype.resize = function (width, height) {
+    if (!width && !height) {
+      const parent = this.canvas.parentNode;
+      width = parent.offsetWidth;
+      height = parent.offsetHeight;
+    }
+    const bw = Math.round(width * DPR);
+    const bh = Math.round(height * DPR);
+    if (this.canvas.width === bw && this.canvas.height === bh) return;
+    this.canvas.width = bw;                       // backing store in device px
+    this.canvas.height = bh;
+    this.canvas.style.width = width + "px";       // layout size stays in CSS px
+    this.canvas.style.height = height + "px";
+    this.bgcanvas.width = bw;
+    this.bgcanvas.height = bh;
+    this.setDirty(true, true);
+  };
+
   const lgcanvas = new LGraphCanvas(canvasEl, graph);
 
   // Sizing: let litegraph's own resize() own the canvas bitmap — it reads the
