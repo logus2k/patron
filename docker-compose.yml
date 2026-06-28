@@ -1,0 +1,36 @@
+# Patron authoring UI — lightweight Python container running serve.py:
+# the static editor + /api/workspace persistence + /api/deploy bridge to agent_runtime.
+services:
+  patron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: logus2k/patron
+    container_name: patron
+    hostname: patron
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      # Published on the host so the reverse proxy keeps reaching it at
+      # host.docker.internal:8088 — no nginx change/reload needed. External auth
+      # is enforced upstream at /patron (OAuth2-gated).
+      - "8088:8088"
+    environment:
+      # agent_runtime is a sibling on logus2k_network; reach it by service name
+      # (the deploy bridge relays server-to-server, PUT /admin/agents/<id>).
+      AGENT_RUNTIME_URL: http://agent-runtime-app:6817
+    volumes:
+      # Persist the single workspace doc on the host so Saves survive a rebuild —
+      # the image fs is ephemeral; data/ is gitignored and the source of truth.
+      - ./data:/app/data
+    networks:
+      - logus2k_network
+
+networks:
+  # Shared external network (owned by the agent_bus compose); agent-runtime-app,
+  # agent_server, etc. live here. Patron joins it to reach the runtime by name.
+  logus2k_network:
+    external: true

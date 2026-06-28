@@ -1,0 +1,12 @@
+# Keep the build context (and image) lean — only the app files are COPY'd.
+.git
+.gitignore
+.dockerignore
+.venv_patron/
+data/
+documents/
+examples/
+test/
+**/__pycache__/
+*.pyc
+.DS_Store
