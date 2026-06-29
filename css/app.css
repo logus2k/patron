@@ -45,7 +45,7 @@
   --accent: #1f6fd6;
   --btn-bg: #eef1f5;
   --btn-bg-hover: #e3e8ee;
-  --item-bg: #f0f3f7;
+  --item-bg: #fbfbfb;
   --item-bg-hover: #e7ecf2;
   --code: #24506e;
   --run: #1f7a3d;
@@ -120,7 +120,7 @@ html, body {
 .jsPanel { font-family: inherit; box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5) !important; }
 /* Close button: 2px smaller than the "xs" size (1rem→14px) and not bold. */
 /* Nudge the control button down 4px. */
-.jsPanel-controlbar .jsPanel-btn { margin: 4px 0px 0px 0px !important; }
+.jsPanel-controlbar .jsPanel-btn { margin: 2px 0px 0px 0px !important; }
 /* Close X icon size. */
 .jsPanel-controlbar .jsPanel-btn-close svg:not(.svg-inline--fa) { width: 20px !important; height: 20px !important; }
 /* Override jsPanel's xs control sizing — tight icon, no margin. */
@@ -141,7 +141,7 @@ html, body {
 /* ---- palette items ---- */
 .palette-group { margin-bottom: 14px; }
 .palette-group .group-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
   margin-bottom: 6px;
 }
@@ -149,10 +149,10 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 3px 7px;
   margin-bottom: 5px;
   background: var(--item-bg);
-  border: 1px solid var(--panel-border);
+  border: 1px outset var(--panel-border);
   border-left-width: 3px;
   border-radius: 5px;
   cursor: grab;

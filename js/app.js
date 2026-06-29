@@ -146,7 +146,8 @@
       g.className = "palette-group";
       const label = document.createElement("div");
       label.className = "group-label";
-      label.textContent = grp.group;
+      // Drop the "GoF demo ·" prefix; all section titles are UPPERCASE.
+      label.textContent = grp.group.replace(/^GoF demo\s*[·-]\s*/, "").toUpperCase();
       g.appendChild(label);
 
       grp.items.forEach((it) => {
@@ -350,7 +351,12 @@
       ui: {
         theme: document.documentElement.dataset.theme,
         view: { offset: lgcanvas.ds.offset.slice(), scale: lgcanvas.ds.scale },
-        panels: { toolbox: panelRect(toolboxPanel), output: panelRect(outputPanel) },
+        panels: {
+          toolbox: panelRect(toolboxPanel),
+          output: panelRect(outputPanel),
+          props: panelRect(window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null),
+        },
+        selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
       },
     };
   }
@@ -366,7 +372,17 @@
     const panels = ui.panels || {};
     applyPanelRect(toolboxPanel, panels.toolbox);
     applyPanelRect(outputPanel, panels.output);
+    // Properties panel is created lazily by props-panel.js — stash its saved rect so it can
+    // position itself from it (and apply now if it already exists).
+    if (window.PatronApp) window.PatronApp.propsRect = panels.props || null;
+    const propsEl = window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null;
+    if (propsEl) applyPanelRect(propsEl, panels.props);
     graph.setDirtyCanvas(true, true);
+    // Restore the previous selection (auto-save captures it on pointerup).
+    if (Array.isArray(ui.selected) && ui.selected.length && lgcanvas.selectNodes) {
+      const nodes = ui.selected.map((id) => graph.getNodeById(Number(id))).filter(Boolean);
+      if (nodes.length) lgcanvas.selectNodes(nodes);
+    }
   }
 
   async function saveWorkspace(opts) {
@@ -456,6 +472,9 @@
     // selection outline around a node — same color as the node's selected (lit-up) edges
     // so the border and links read as one. (litegraph hardcodes #FFF → invisible on white.)
     LiteGraph.NODE_BOX_OUTLINE_COLOR = cssVar("--link-highlight", "#ffb02e");
+    // Selected-node title text — dark, so it reads on the soft pastel green / slate title bar
+    // (litegraph defaults it to white). The bar color is theme-independent, so use one value.
+    LiteGraph.NODE_SELECTED_TITLE_COLOR = "#233040";
     // highlight color for edges of a selected node (litegraph hardcodes #FFF →
     // invisible on light paper; vendor patched to honor this global).
     LiteGraph.LINK_HIGHLIGHT_COLOR = cssVar("--link-highlight", "#ffffff");

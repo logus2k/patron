@@ -8646,7 +8646,7 @@ LGraphNode.prototype.executeAction = function(action)
 
         //connection slots
         ctx.textAlign = horizontal ? "center" : "left";
-        ctx.font = this.inner_text_font;
+        ctx.font = "normal small-caps " + (LiteGraph.NODE_SUBTEXT_SIZE - 1) + "px 'Roboto', sans-serif"; /* PATRON: small-caps connector labels, 1px smaller */
 
         var render_text = !low_quality;
 
@@ -8749,7 +8749,7 @@ LGraphNode.prototype.executeAction = function(action)
                             if (horizontal || slot.dir == LiteGraph.UP) {
                                 ctx.fillText(text, pos[0], pos[1] - 10);
                             } else {
-                                ctx.fillText(text, pos[0] + 10, pos[1] + 5);
+                                ctx.fillText(text, pos[0] + 10, pos[1] + 3); /* PATRON: up 2px to align with the slot dot */
                             }
                         }
                     }
@@ -8856,7 +8856,7 @@ LGraphNode.prototype.executeAction = function(action)
                             if (horizontal || slot.dir == LiteGraph.DOWN) {
                                 ctx.fillText(text, pos[0], pos[1] - 8);
                             } else {
-                                ctx.fillText(text, pos[0] - 10, pos[1] + 5);
+                                ctx.fillText(text, pos[0] - 10, pos[1] + 3); /* PATRON: up 2px to align with the slot dot */
                             }
                         }
                     }
@@ -8867,12 +8867,13 @@ LGraphNode.prototype.executeAction = function(action)
             ctx.globalAlpha = 1;
 
             if (node.widgets) {
-				var widgets_y = max_y;
+				var widgets_y = max_y + 5; /* PATRON: +5px gap between connector labels and first widget */
                 if (horizontal || node.widgets_up) {
                     widgets_y = 2;
                 }
 				if( node.widgets_start_y != null )
                     widgets_y = node.widgets_start_y;
+                ctx.font = this.inner_text_font; /* PATRON: reset — small-caps is ONLY for connector labels, not widgets */
                 this.drawNodeWidgets(
                     node,
                     widgets_y,
@@ -13370,7 +13371,7 @@ LGraphNode.prototype.executeAction = function(action)
         };
 
 		if(node)
-			options.title = node.type;
+			options.title = node.getTitle ? node.getTitle() : (node.title || node.type); /* PATRON: friendly title, not the internal type path */
 
         //check if mouse is in input
         var slot = null;

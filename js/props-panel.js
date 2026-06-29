@@ -3,7 +3,9 @@
  * selected node's fields in an HTML form. Behaviour:
  *   - toggled from the View menu ("Properties Panel"),
  *   - opened by DOUBLE-clicking a node (single-click only updates it when already open),
- *   - remembers its position/size across reloads (localStorage),
+ *   - remembers its position/size/visibility across reloads via the SERVER workspace
+ *     (collectWorkspace reads PatronProps.panel(); applyWorkspace stashes PatronApp.propsRect),
+ *     exactly like the Toolbox/Output panels — no localStorage,
  *   - mirrors the node's widgets (combo→select, toggle→checkbox, else text); edits sync
  *     back to the node, the canvas widget, the node width, and the autosave.
  *
@@ -11,7 +13,6 @@
  */
 (function () {
   "use strict";
-  const LS_KEY = "patron.props.rect";
   let panel = null, body = null, open = false, lastNode = null;
 
   function ready(cb) {
@@ -20,38 +21,28 @@
     setTimeout(() => ready(cb), 200);
   }
 
-  function saveRect() {
-    if (!panel) return;
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify({
-        left: panel.style.left, top: panel.style.top,
-        width: panel.style.width, height: panel.style.height,
-      }));
-    } catch (e) { /* ignore */ }
-  }
-  function restoreRect() {
-    if (!panel) return;
-    let r;
-    try { r = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) { r = null; }
-    if (!r) return;
-    if (r.left) panel.style.left = r.left;
-    if (r.top) panel.style.top = r.top;
-    if (r.width && r.height && typeof panel.resize === "function") {
-      try { panel.resize({ width: parseInt(r.width, 10), height: parseInt(r.height, 10) }); }
-      catch (e) { panel.style.width = r.width; panel.style.height = r.height; }
-    }
-  }
+  // Position/size is persisted in the SERVER workspace (app.js collectWorkspace reads
+  // PatronProps.panel(); applyWorkspace stashes the saved rect on PatronApp.propsRect). We
+  // position the panel FROM that rect at creation, so jsPanel's default never overrides it.
+  function savedRect() { return (window.PatronApp && window.PatronApp.propsRect) || null; }
 
   function ensurePanel() {
     if (panel) return;
+    const r = savedRect(); // server-persisted rect (position + size), or null
+    const position = r && r.left && r.top
+      ? { my: "left-top", at: "left-top", offsetX: parseInt(r.left, 10) || 0, offsetY: parseInt(r.top, 10) || 0 }
+      : { my: "center-top", at: "center-top", offsetX: 0, offsetY: 58 };
+    const panelSize = r && r.width && r.height
+      ? { width: parseInt(r.width, 10), height: parseInt(r.height, 10) }
+      : { width: 300, height: 360 };
     if (typeof jsPanel !== "undefined") {
       panel = jsPanel.create({
         headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Properties</span>',
         theme: "none",
         borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
         border: "1px solid var(--panel-border)",
-        panelSize: { width: 300, height: 360 },
-        position: { my: "center-top", at: "center-top", offsetX: 0, offsetY: 58 },
+        panelSize: panelSize,                 // restored from the saved workspace
+        position: position,                   // …positioned from it, so jsPanel doesn't recenter
         boxShadow: 3,
         headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
         addCloseControl: 0,
@@ -62,9 +53,6 @@
           body = p.content;
         },
       });
-      restoreRect();
-      panel.addEventListener("jspanelmovestop", saveRect);
-      panel.addEventListener("jspanelresizestop", saveRect);
       panel.style.display = "none";
     } else {
       panel = document.createElement("div");
@@ -165,10 +153,11 @@
     if (v) populate(node || lastNode || selectedNode());
     const mb = window.PatronApp && window.PatronApp.menuBar;
     if (mb) { mb.setContext("propsVisible", v); if (mb.refresh) mb.refresh(); }
+    if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
   }
   function toggle() { setOpen(!open); }
 
-  window.PatronProps = { toggle, setOpen, isOpen: () => open, populate };
+  window.PatronProps = { toggle, setOpen, isOpen: () => open, populate, panel: () => panel };
 
   ready((app) => {
     const canvas = app.canvas;
@@ -189,5 +178,8 @@
       if (prevSel) prevSel.call(this, node);
       if (open) populate(node);
     };
+    // Restore the panel's open state from the saved workspace (visible == not hidden).
+    const r0 = savedRect();
+    if (r0 && r0.hidden === false) setOpen(true);
   });
 })();

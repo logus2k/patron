@@ -23,7 +23,7 @@
     DESTINATION: "destination", // Deliver -> a channel block (whatsapp/tts/bus)
   };
 
-  const COLOR = "#5aa17c"; // agent-node title color — softer/pastel green (was #2f7d52)
+  const COLOR = "#8ec9a8"; // agent-node selected-title color — soft pastel green
 
   const MIN_W = 180, MAX_W = 560; // width has a usable range; height is locked to content
   const VAL_SLOT = 48; // fixed space reserved for a widget's value (it truncates, not the floor)
@@ -66,7 +66,8 @@
     node.computeSize = function (out) {
       const s = baseCompute.call(this, out);
       s[0] = Math.min(MAX_W, Math.max(s[0], contentWidth(this))); // width range
-      return s; // s[1] stays the natural content height (widget count)
+      if (this.widgets && this.widgets.length) s[1] += 5; // +5px gap connectors→first widget
+      return s;
     };
     node.onResize = function (size) {
       size[0] = Math.max(contentWidth(this), Math.min(size[0], MAX_W)); // resize width…
@@ -260,7 +261,7 @@
 
   // Palette group for the toolbox (app.js renders it).
   const PALETTE = {
-    group: "Agent (runtime DSL)",
+    group: "Activities",
     color: COLOR,
     items: [
       { type: "patron/agent/trigger", label: "Trigger" },
