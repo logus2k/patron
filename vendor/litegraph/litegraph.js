@@ -9300,34 +9300,34 @@ LGraphNode.prototype.executeAction = function(action)
                 area[1] -= title_height;
                 area[3] += title_height;
             }
-            ctx.lineWidth = 1;
-            ctx.globalAlpha = 0.8;
+            ctx.lineWidth = 3;       /* PATRON: thicker selection border (was 1) */
+            ctx.globalAlpha = 1;     /* PATRON: solid selection border (was 0.8) */
             ctx.beginPath();
             if (shape == LiteGraph.BOX_SHAPE) {
                 ctx.rect(
-                    -6 + area[0],
-                    -6 + area[1],
-                    12 + area[2],
-                    12 + area[3]
+                    area[0],
+                    area[1],
+                    area[2],
+                    area[3]
                 );
             } else if (
                 shape == LiteGraph.ROUND_SHAPE ||
                 (shape == LiteGraph.CARD_SHAPE && node.flags.collapsed)
             ) {
                 ctx.roundRect(
-                    -6 + area[0],
-                    -6 + area[1],
-                    12 + area[2],
-                    12 + area[3],
-                    [this.round_radius * 2]
+                    area[0],
+                    area[1],
+                    area[2],
+                    area[3],
+                    [this.round_radius]
                 );
             } else if (shape == LiteGraph.CARD_SHAPE) {
                 ctx.roundRect(
-                    -6 + area[0],
-                    -6 + area[1],
-                    12 + area[2],
-                    12 + area[3],
-                    [this.round_radius * 2,2,this.round_radius * 2,2]
+                    area[0],
+                    area[1],
+                    area[2],
+                    area[3],
+                    [this.round_radius,2,this.round_radius,2]
                 );
             } else if (shape == LiteGraph.CIRCLE_SHAPE) {
                 ctx.arc(

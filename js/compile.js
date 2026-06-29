@@ -153,7 +153,18 @@
     dsl.input = { template: p(brain).input_template || "", vars };
     dsl.delivery = { channel: DEST_CHANNEL[dest.type], target: p(dest).target || "" };
 
-    return { ok: true, dsl };
+    // The schedule side: when the trigger is a schedule, lower its cron + timezone into a
+    // separate object the deploy bridge turns into an agent_scheduler job. The agent
+    // record carries only `trigger.type`; the *when* (cron) lives here.
+    let schedule = null;
+    if ((p(trigger).trigger_type || "schedule") === "schedule") {
+      schedule = {
+        cron: String(p(trigger).cron || "0 7 * * *").trim(),
+        timezone: String(p(trigger).timezone || "").trim(), // "" => UTC
+      };
+    }
+
+    return { ok: true, dsl, schedule };
   }
 
   return { compile, NODE, DSL_VERSION };

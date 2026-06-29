@@ -34,7 +34,9 @@ window.PATRON_MENU = [
     label: "View",
     key: "V",
     items: [
+      { label: "Toolbox", command: "view.toolbox", type: "checkbox", checked: "toolboxVisible" },
       { label: "Output Panel", command: "view.output", type: "checkbox", checked: "outputVisible" },
+      { label: "Properties Panel", command: "view.properties", type: "checkbox", checked: "propsVisible" },
       { type: "separator" },
       // One switching option (not a checkbox): only the item matching the
       // current theme's opposite is visible, so the label flips between the two.

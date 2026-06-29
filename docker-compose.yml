@@ -22,6 +22,8 @@ services:
       # agent_runtime is a sibling on logus2k_network; reach it by service name
       # (the deploy bridge relays server-to-server, PUT /admin/agents/<id>).
       AGENT_RUNTIME_URL: http://agent-runtime-app:6817
+      # Deploy also upserts the scheduler cron job (linked by event_data.agent_uid).
+      AGENT_SCHEDULER_URL: http://agent-scheduler-app:6816
     volumes:
       # Persist the single workspace doc on the host so Saves survive a rebuild —
       # the image fs is ephemeral; data/ is gitignored and the source of truth.

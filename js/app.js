@@ -84,6 +84,16 @@
   // frame when panning the diagram); the full-screen surface looks cleaner
   // without it.
   lgcanvas.render_canvas_border = false;
+  // Hide litegraph's bottom-left debug overlay (T/I/N/V/FPS counters) — dev noise here.
+  lgcanvas.show_info = false;
+
+  // Use the vendored Roboto for canvas node text too (litegraph defaults to Arial). The
+  // canvas paints before the @font-face TTF finishes loading, so repaint once it's ready.
+  lgcanvas.title_text_font = "" + LiteGraph.NODE_TEXT_SIZE + "px 'Roboto', sans-serif";
+  lgcanvas.inner_text_font = "normal " + LiteGraph.NODE_SUBTEXT_SIZE + "px 'Roboto', sans-serif";
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => lgcanvas.setDirty(true, true));
+  }
 
   // Sizing: let litegraph's own resize() own the canvas bitmap — it reads the
   // parent size, resizes BOTH the fg + bg canvases, and no-ops when unchanged.
@@ -143,8 +153,10 @@
         el.draggable = true;
         el.style.borderLeftColor = grp.color;
         el.dataset.type = it.type;
-        el.innerHTML =
-          '<span class="swatch" style="background:' + grp.color + '"></span>' + it.label;
+        const ico = (window.PatronIcons && window.PatronIcons.has(it.type))
+          ? '<span class="icon">' + window.PatronIcons.svgString(it.type, 20) + "</span>"
+          : '<span class="swatch" style="background:' + grp.color + '"></span>';
+        el.innerHTML = ico + it.label;
         el.addEventListener("dragstart", (e) => {
           e.dataTransfer.setData("text/plain", it.type);
         });
@@ -258,21 +270,21 @@
     inspectOut.textContent = "News Agent loaded (Trigger → Brain(+Tools) → Deliver → WhatsApp). Press ⚙ Compile → DSL.";
   }
 
-  // Lower the current graph to the (draft) runtime DSL and show it.
+  // Lower the current graph to the runtime record + scheduler-job spec and show both.
   function compileToDsl() {
     const out = global.PatronCompile.compile(graph.serialize());
     if (out.ok) {
       inspectOut.textContent =
-        "// runtime DSL (draft — provisional until agent_runtime hardens it)\n" +
-        JSON.stringify(out.dsl, null, 2);
+        "// agent record + schedule (what Deploy writes to runtime + scheduler)\n" +
+        JSON.stringify({ record: out.dsl, schedule: out.schedule }, null, 2);
     } else {
       inspectOut.textContent = "// compile errors:\n- " + out.errors.join("\n- ");
     }
     showOutput(); // always surface the result
   }
 
-  // Deploy: compile, then push the runtime DSL to agent_runtime via serve.py's
-  // bridge (POST api/deploy → PUT /admin/agents/<id>). Live on the next trigger.
+  // Deploy: compile, then push BOTH records via serve.py's bridge — the agent record to
+  // agent_runtime and (if scheduled) the cron job to agent_scheduler, linked by uid.
   async function deployToRuntime() {
     const out = global.PatronCompile.compile(graph.serialize());
     if (!out.ok) {
@@ -280,20 +292,21 @@
       showOutput();
       return;
     }
-    inspectOut.textContent = "Deploying '" + out.dsl.id + "' to agent_runtime…";
+    inspectOut.textContent = "Deploying '" + out.dsl.id + "' (agent + schedule)…";
     showOutput();
     try {
       const res = await fetch("api/deploy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(out.dsl),
+        body: JSON.stringify({ record: out.dsl, schedule: out.schedule }),
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
         inspectOut.textContent =
-          "✅ Deployed '" + j.id + "' to agent_runtime (live).\n" +
-          "It will run with these settings on its next trigger.\n\n" +
-          JSON.stringify(out.dsl, null, 2);
+          "✅ Deployed '" + j.id + "'" + (j.uid ? " (uid " + String(j.uid).slice(0, 8) + ")" : "") + " to agent_runtime.\n" +
+          "Schedule job: " + (j.scheduled || "?") +
+          (j.scheduler_detail ? " — " + j.scheduler_detail : "") + "\n\n" +
+          JSON.stringify({ record: out.dsl, schedule: out.schedule }, null, 2);
       } else {
         inspectOut.textContent =
           "❌ Deploy failed: " + (j.error || ("HTTP " + res.status)) +
@@ -438,6 +451,9 @@
     LiteGraph.WIDGET_TEXT_COLOR = cssVar("--widget-text", "#ddd");
     LiteGraph.WIDGET_SECONDARY_TEXT_COLOR = cssVar("--widget-text2", "#999");
     LiteGraph.LINK_COLOR = cssVar("--link", "#9aa9a9");
+    // selection outline around a node — same color as the node's selected (lit-up) edges
+    // so the border and links read as one. (litegraph hardcodes #FFF → invisible on white.)
+    LiteGraph.NODE_BOX_OUTLINE_COLOR = cssVar("--link-highlight", "#ffb02e");
     // highlight color for edges of a selected node (litegraph hardcodes #FFF →
     // invisible on light paper; vendor patched to honor this global).
     LiteGraph.LINK_HIGHLIGHT_COLOR = cssVar("--link-highlight", "#ffffff");
@@ -511,6 +527,7 @@
   menuBar = new MenuBar("#menubar");
   menuBar.setContext("isDark", document.documentElement.dataset.theme === "dark");
   menuBar.setContext("isLight", document.documentElement.dataset.theme !== "dark");
+  menuBar.setContext("toolboxVisible", true);
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
@@ -522,6 +539,7 @@
   menuBar.registerCommand("build.run", runOnce);
   menuBar.registerCommand("build.compile", compileToDsl);
   menuBar.registerCommand("build.deploy", deployToRuntime);
+  menuBar.registerCommand("view.toolbox", toggleToolbox);
   menuBar.registerCommand("view.output", toggleOutput);
   menuBar.registerCommand("view.theme", toggleTheme);
   menuBar.registerCommand("help.about", showAbout);
@@ -536,12 +554,12 @@
     toolboxPanel = jsPanel.create({
       headerTitle: "🧱 Toolbox",
       theme: "none",
-      borderRadius: "6px",
+      borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
       panelSize: { width: 252, height: 500 },
       position: { my: "left-top", at: "left-top", offsetX: 14, offsetY: 58 },
       boxShadow: 3,
-      headerControls: { minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
       callback: (p) => {
         p.content.style.cssText = "padding:10px;overflow-y:auto;background:var(--panel);color:var(--text)";
@@ -565,14 +583,14 @@
       return;
     }
     outputPanel = jsPanel.create({
-      headerTitle: "📄 Output",
+      headerTitle: "🖥 Output",
       theme: "none",
-      borderRadius: "6px",
+      borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
       panelSize: { width: 360, height: 460 },
       position: { my: "right-top", at: "right-top", offsetX: -14, offsetY: 58 },
       boxShadow: 3,
-      headerControls: { minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
       callback: (p) => {
         p.content.style.cssText = "padding:10px;overflow:auto;background:var(--panel);color:var(--text)";
@@ -595,6 +613,14 @@
     const el = outputEl();
     el.style.display = el.style.display === "none" ? "" : "none";
     syncOutputMenu(el.style.display !== "none");
+  }
+  // Toolbox toggle (mirrors Output) — the jsPanel, or the #palette sidebar fallback.
+  function toolboxEl() { return toolboxPanel || document.getElementById("palette"); }
+  function toggleToolbox() {
+    const el = toolboxEl();
+    if (!el) return;
+    el.style.display = el.style.display === "none" ? "" : "none";
+    if (menuBar) { menuBar.setContext("toolboxVisible", el.style.display !== "none"); menuBar.refresh(); }
   }
 
   // --- boot -----------------------------------------------------------------
@@ -640,7 +666,9 @@
     appReady = true;
   })();
 
-  // Expose for console tinkering.
+  // Expose for console tinkering + the Properties panel (js/props-panel.js).
   global.PatronApp.graph = graph;
   global.PatronApp.canvas = lgcanvas;
+  global.PatronApp.scheduleSave = scheduleSave;
+  global.PatronApp.menuBar = menuBar;
 })(window);

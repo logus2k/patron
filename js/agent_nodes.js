@@ -23,22 +23,86 @@
     DESTINATION: "destination", // Deliver -> a channel block (whatsapp/tts/bus)
   };
 
-  const COLOR = "#2f7d52"; // agent-node title color (distinct from the GoF demo)
+  const COLOR = "#5aa17c"; // agent-node title color — softer/pastel green (was #2f7d52)
 
-  function apply(node, h) {
+  const MIN_W = 240, MAX_W = 560; // width has a usable range; height is locked to content
+
+  // Width to fit the widest widget's [label … value], clamped to [MIN_W, MAX_W] so the
+  // label and value never overlap (and the node never gets absurdly wide).
+  function contentWidth(node) {
+    const ctx = contentWidth._ctx ||
+      (contentWidth._ctx = document.createElement("canvas").getContext("2d"));
+    const size = (typeof LiteGraph !== "undefined" && LiteGraph.NODE_TEXT_SIZE) || 14;
+    ctx.font = size + "px 'Roboto', Arial, sans-serif";
+    let w = MIN_W;
+    for (const wd of node.widgets || []) {
+      const label = String(wd.label || wd.name || "");
+      const val = wd.value == null ? "" : String(wd.value);
+      const arrows = (wd.type === "number" || wd.type === "combo") ? 40 : 0; // ◀ ▶ chrome
+      const need = ctx.measureText(label).width + ctx.measureText(val).width + 56 + arrows;
+      if (need > w) w = need;
+    }
+    return Math.round(Math.max(MIN_W, Math.min(MAX_W, w)));
+  }
+
+  // Re-fit a node after a value changes (inline edit / properties panel).
+  function refitNode(node) {
+    if (node && node.widgets) {
+      node.size = node.computeSize();
+      if (node.setDirtyCanvas) node.setDirtyCanvas(true, true);
+    }
+  }
+  global.PatronFitNodeWidth = refitNode;
+
+  // Apply the agent-node look + enforce a content-aware MIN width (no overlap) and a MAX
+  // width/height — across create, load, and manual resize. We override computeSize (used
+  // by litegraph on create and as the resize floor), onResize (manual resize clamp), and
+  // configure (so narrow SAVED sizes are widened on load). Height comes from computeSize
+  // (widget count), so the `h` arg is now ignored.
+  function apply(node, _h) {
     node.color = COLOR;
-    node.size = [240, h];
+    const baseCompute = node.computeSize;
+    const baseConfigure = node.configure;
+    node.computeSize = function (out) {
+      const s = baseCompute.call(this, out);
+      s[0] = Math.min(MAX_W, Math.max(s[0], contentWidth(this))); // width range
+      return s; // s[1] stays the natural content height (widget count)
+    };
+    node.onResize = function (size) {
+      size[0] = Math.max(contentWidth(this), Math.min(size[0], MAX_W)); // resize width…
+      size[1] = this.computeSize()[1]; // …but height is fixed to content (no taller)
+    };
+    node.configure = function (info) {
+      baseConfigure.call(this, info);          // restore saved size + (stale) color…
+      this.color = COLOR;                      // …but always use the current palette color
+      if (this.size) {
+        this.size[0] = Math.min(MAX_W, Math.max(this.size[0], contentWidth(this)));
+        this.size[1] = this.computeSize()[1]; // …snap height to content on load
+      }
+    };
+    node.size = node.computeSize();
+    iconize(node);
+  }
+  // Draw the block's filled/colored SVG icon in place of litegraph's default title box.
+  function iconize(node) {
+    node.onDrawTitleBox = function (ctx, title_height) {
+      if (global.PatronIcons && global.PatronIcons.has(this.type)) {
+        global.PatronIcons.drawTitleBox(ctx, this.type, title_height);
+      }
+    };
   }
   function textW(node, name) {
     node.addWidget("text", name, node.properties[name], (v) => (node.properties[name] = v));
   }
-  function numW(node, name, min, max) {
+  // precision = decimal places shown (litegraph defaults to 3 → "1024.000"); pass 0 for
+  // integers, 2 for fractions. min/max are also handed to litegraph so drag-edits clamp.
+  function numW(node, name, min, max, precision) {
     node.addWidget("number", name, node.properties[name], (v) => {
       let n = Number(v);
       if (min != null) n = Math.max(min, n);
       if (max != null) n = Math.min(max, n);
       node.properties[name] = n;
-    });
+    }, { min: min == null ? undefined : min, max: max == null ? undefined : max, precision: precision == null ? 2 : precision });
   }
   function toggleW(node, name) {
     node.addWidget("toggle", name, node.properties[name], (v) => (node.properties[name] = v));
@@ -53,9 +117,15 @@
       this.addOutput("task", TYPES.TASK);
       this.addProperty("agent_id", "news-morning-ai");
       this.addProperty("trigger_type", "schedule");
+      // Schedule fields — used only when trigger_type === "schedule"; they drive the
+      // agent_scheduler job that fires this agent (cron + IANA timezone).
+      this.addProperty("cron", "0 7 * * *");
+      this.addProperty("timezone", "Europe/Lisbon");
       textW(this, "agent_id");
       comboW(this, "trigger_type", ["schedule", "channel"]);
-      apply(this, 90);
+      textW(this, "cron");
+      textW(this, "timezone");
+      apply(this, 150);
     }
     Trigger.title = "Trigger";
     Trigger.desc = "Entry point (Observer). Fires the agent; holds its id.";
@@ -86,8 +156,8 @@
       this.addProperty("input_template", "Curate the {n} best morning headlines about {topic}.");
       this.addProperty("input_vars", '{"n": 5, "topic": "AI agents"}');
       textW(this, "persona");
-      numW(this, "temperature", 0, 2);
-      numW(this, "max_tokens", 1, null);
+      numW(this, "temperature", 0, 2, 2);
+      numW(this, "max_tokens", 1, null, 0);
       textW(this, "input_template");
       textW(this, "input_vars");
       apply(this, 170);
@@ -103,7 +173,7 @@
       this.addProperty("max_rounds", 3);
       textW(this, "server");
       textW(this, "allow");
-      numW(this, "max_rounds", 1, null);
+      numW(this, "max_rounds", 1, null, 0);
       apply(this, 110);
     }
     Tools.title = "Tools";
@@ -116,7 +186,7 @@
       this.addProperty("forbidden", "");
       this.addProperty("min_confidence", 0.5);
       textW(this, "forbidden");
-      numW(this, "min_confidence", 0, 1);
+      numW(this, "min_confidence", 0, 1, 2);
       apply(this, 90);
     }
     Guardrail.title = "Guardrail";
@@ -149,7 +219,11 @@
       Dest._channel = channel;
       return Dest;
     }
-    function node_apply(n, h) { n.color = "#5a6f8c"; n.size = [200, h]; } // destination tint
+    function node_apply(n, h) { // destination tint — softer slate
+      n.color = "#8193ad"; n.size = [200, h]; iconize(n);
+      const base = n.configure;
+      n.configure = function (info) { base.call(this, info); this.color = "#8193ad"; }; // ignore stale serialized color
+    }
 
     const WhatsApp = destination("whatsapp", "351961050313@c.us", "chat id");
     WhatsApp.title = "WhatsApp";
@@ -190,7 +264,7 @@
   // Destination (channel) blocks — a separate palette group.
   const DESTINATIONS = {
     group: "Destinations",
-    color: "#5a6f8c",
+    color: "#8193ad",
     items: [
       { type: "patron/dest/whatsapp", label: "WhatsApp" },
       { type: "patron/dest/tts", label: "TTS" },

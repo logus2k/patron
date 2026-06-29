@@ -29,6 +29,12 @@
 
     <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>
+    <!-- edge resize cursors + width-resize + crosshair fix (must load before app.js) -->
+    <script src="js/node-resize.js"></script>
+    <!-- per-block filled/colored SVG icons (title box + toolbox); load before app.js -->
+    <script src="js/block-icons.js"></script>
+    <!-- inline widget editing (overrides litegraph's detached prompt) -->
+    <script src="js/inline-edit.js"></script>
     <script src="vendor/jspanel/jspanel.min.js"></script>
     <!-- GoF pattern nodes (conceptual inspiration) -->
     <script src="js/patterns.js"></script>
@@ -41,5 +47,9 @@
     <script src="js/menu.js"></script>
     <!-- app bootstrap + wiring -->
     <script src="js/app.js"></script>
+    <!-- Properties panel (edits the selected node's fields in an HTML form) -->
+    <script src="js/props-panel.js"></script>
+    <!-- Patron-owned link context menu (replaces litegraph's collapsed native one) -->
+    <script src="js/link-menu.js"></script>
   </body>
 </html>

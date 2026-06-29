@@ -1,3 +1,11 @@
+/* Roboto — vendored from noted (patron/fonts/), so the UI renders identically without
+   relying on the OS having Roboto installed. Used everywhere via the font stacks below. */
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Thin.ttf")    format("truetype"); font-weight: 100; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Light.ttf")   format("truetype"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Medium.ttf")  format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Bold.ttf")    format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+
 :root {
   --bg: #1e1f23;
   --panel: #26272c;
@@ -25,7 +33,7 @@
   --widget-text: #dddddd;
   --widget-text2: #999999;
   --link: #9aa9a9;
-  --link-highlight: #ffb02e; /* bright amber — pops on dark paper */
+  --link-highlight: #ffb02e; /* bright amber — pops on dark paper (also the selection border) */
 }
 
 :root[data-theme="light"] {
@@ -53,7 +61,7 @@
   --widget-text: #1c2530;
   --widget-text2: #5f6f80;
   --link: #5a7fa6;
-  --link-highlight: #f5520c; /* strong orange — pops on light paper */
+  --link-highlight: #f5520c; /* strong orange — pops on light paper (also the selection border) */
 }
 
 * { box-sizing: border-box; }
@@ -63,7 +71,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   overflow: hidden;
   transition: background 0.15s ease, color 0.15s ease;
@@ -73,7 +81,10 @@ html, body {
 #topbar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  z-index: 10;
+  /* Above the jsPanel panels (Toolbox/Output/Properties, z-index ~100+). #topbar is a
+     stacking context, so this also lifts its dropdown menus above the panels — the menu
+     bar must sit on top of everything. */
+  z-index: 100000;
   height: 46px;
   display: flex;
   align-items: center;
@@ -88,13 +99,12 @@ html, body {
   pointer-events: auto;
   font-weight: 600;
   font-size: 13px;
-  letter-spacing: 0.3px;
   color: #000;                 /* keep the "P" black on both light & dark themes */
   border: 0.5px solid #999999;
-  padding: 5px 10px;
-  border-radius: 20px;
+  padding: 5px 9px;
+  border-radius: 24px;
   background-color: #fdcc65;
-  margin-top: 2px;
+  margin-top: 0px;
 }
 #btn-theme { min-width: 84px; }
 
@@ -106,10 +116,21 @@ html, body {
 }
 
 /* ---- floating Toolbox (jsPanel, theme:'none' → themed via our vars) ---- */
-.jsPanel { font-family: inherit; }
-.jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); }
+/* Same drop shadow as the litegraph blocks (canvas: offset 2,2 / blur 3 / rgba(0,0,0,.5)). */
+.jsPanel { font-family: inherit; box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5) !important; }
+/* Close button: 2px smaller than the "xs" size (1rem→14px) and not bold. */
+.jsPanel-controlbar .jsPanel-btn-close { font-weight: 400 !important; }
+.jsPanel-controlbar .jsPanel-btn-close span:not(.material-icons),
+.jsPanel-controlbar .jsPanel-btn-close svg:not(.svg-inline--fa) { width: 14px !important; height: 14px !important; }
+.jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); border-top-left-radius: 8px; border-top-right-radius: 8px; height: 30px; }
+.jsPanel .jsPanel-titlebar { height: 30px; } /* match the litegraph block title height (30px) */
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
-.jsPanel .jsPanel-content { color: var(--text); }
+/* jsPanel defaults the title to small-caps — override to normal case. */
+.jsPanel-titlebar .jsPanel-title { font-variant: normal !important; }
+/* The content fills the panel but has no radius of its own (and our cssText callback wipes
+   the inline radius jsPanel sets) → its square corners cover the container's rounded ones.
+   Round all four corners to match the panel/node radius (8px). */
+.jsPanel .jsPanel-content { color: var(--text); border-radius: 0px 0px 8px 8px; }
 
 /* ---- palette items ---- */
 .palette-group { margin-bottom: 14px; }
@@ -134,6 +155,8 @@ html, body {
 }
 .palette-item:hover { background: var(--item-bg-hover); }
 .palette-item:active { cursor: grabbing; }
+.palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; }
+.palette-item .icon svg { width: 100%; height: 100%; display: block; }
 .palette-item .swatch {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;
 }

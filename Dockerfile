@@ -12,6 +12,7 @@ WORKDIR /app
 COPY index.html serve.py ./
 COPY js/ ./js/
 COPY css/ ./css/
+COPY fonts/ ./fonts/
 COPY vendor/ ./vendor/
 
 # serve.py listens on 8088, bound to 0.0.0.0 inside the container by default.
@@ -20,6 +21,8 @@ EXPOSE 8088
 # Where the deploy bridge forwards compiled DSLs. On the shared docker network the
 # runtime is reachable by its service name; override per environment as needed.
 ENV AGENT_RUNTIME_URL=http://agent-runtime-app:6817
+# Deploy also upserts the agent_scheduler cron job, linked by event_data.agent_uid.
+ENV AGENT_SCHEDULER_URL=http://agent-scheduler-app:6816
 
 # Liveness: the workspace API always returns 200 (even with no saved doc yet).
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

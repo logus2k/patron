@@ -31,6 +31,18 @@ run("News Agent graph compiles to the expected v0 flat record", () => {
     input: { template: "Curate the {n} best morning headlines about {topic}.", vars: { n: 5, topic: "AI agents" } },
     delivery: { channel: "whatsapp", target: "351961050313@c.us" },
   });
+  // a schedule trigger also lowers a cron job spec (deploy turns this into the scheduler job)
+  assert.deepStrictEqual(out.schedule, { cron: "0 7 * * *", timezone: "" });
+});
+
+run("trigger_type=channel -> no schedule (no scheduler job)", () => {
+  const out = compile({ nodes: [
+    { type: "patron/agent/trigger", properties: { agent_id: "a", trigger_type: "channel" } },
+    { type: "patron/agent/brain", properties: { persona: "p", input_vars: "{}" } },
+    { type: "patron/dest/bus", properties: { target: "ops" } },
+  ] });
+  assert.strictEqual(out.ok, true);
+  assert.strictEqual(out.schedule, null);
 });
 
 run("a Bus destination lowers channel=bus; rag/tools/guardrail omitted when absent", () => {
