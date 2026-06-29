@@ -544,6 +544,12 @@
   menuBar.registerCommand("view.theme", toggleTheme);
   menuBar.registerCommand("help.about", showAbout);
 
+  // Lucide-style line icon for a panel header (inherits the title color via currentColor).
+  const panelIcon = (paths) =>
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+    ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' +
+    ' style="vertical-align:-3px;margin-right:7px">' + paths + "</svg>";
+
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
   let toolboxPanel = null;
   function createToolbox() {
@@ -552,7 +558,7 @@
       return;
     }
     toolboxPanel = jsPanel.create({
-      headerTitle: "🧱 Toolbox",
+      headerTitle: panelIcon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>') + "Toolbox",
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
@@ -583,7 +589,7 @@
       return;
     }
     outputPanel = jsPanel.create({
-      headerTitle: "🖥 Output",
+      headerTitle: panelIcon('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>') + "Output",
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
