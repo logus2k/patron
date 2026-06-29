@@ -377,6 +377,7 @@
     if (window.PatronApp) window.PatronApp.propsRect = panels.props || null;
     const propsEl = window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null;
     if (propsEl) applyPanelRect(propsEl, panels.props);
+    if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
     graph.setDirtyCanvas(true, true);
     // Restore the previous selection (auto-save captures it on pointerup).
     if (Array.isArray(ui.selected) && ui.selected.length && lgcanvas.selectNodes) {

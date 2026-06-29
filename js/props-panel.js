@@ -29,11 +29,12 @@
   function ensurePanel() {
     if (panel) return;
     const r = savedRect(); // server-persisted rect (position + size), or null
+    const px = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, "")); return isFinite(n) ? n : 0; }; // handles "690px" and "calc(490px)"
     const position = r && r.left && r.top
-      ? { my: "left-top", at: "left-top", offsetX: parseInt(r.left, 10) || 0, offsetY: parseInt(r.top, 10) || 0 }
+      ? { my: "left-top", at: "left-top", offsetX: px(r.left), offsetY: px(r.top) }
       : { my: "center-top", at: "center-top", offsetX: 0, offsetY: 58 };
     const panelSize = r && r.width && r.height
-      ? { width: parseInt(r.width, 10), height: parseInt(r.height, 10) }
+      ? { width: px(r.width) || 300, height: px(r.height) || 360 }
       : { width: 300, height: 360 };
     if (typeof jsPanel !== "undefined") {
       panel = jsPanel.create({
@@ -178,8 +179,14 @@
       if (prevSel) prevSel.call(this, node);
       if (open) populate(node);
     };
-    // Restore the panel's open state from the saved workspace (visible == not hidden).
-    const r0 = savedRect();
-    if (r0 && r0.hidden === false) setOpen(true);
+    // Visibility/position restore is driven by app.js applyWorkspace (it has the workspace
+    // data and calls PatronProps.restore() after the async load) — see PatronProps.restore.
   });
+
+  // Called by app.js applyWorkspace once PatronApp.propsRect is set. Opens the panel if it
+  // was visible when saved (it then positions itself from the saved rect via ensurePanel).
+  window.PatronProps.restore = function () {
+    const r = savedRect();
+    if (r && r.hidden === false) setOpen(true);
+  };
 })();
