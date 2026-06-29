@@ -55,7 +55,7 @@
   --node-bg: #ffffff;
   --node-box: #9fb0c2;
   --node-text: #2a3340;
-  --node-title-text: #f4f7fa;
+  --node-title-text: #233040; /* dark — title sits on the light body (or the pastel selected bar) */
   --widget-bg: #eef2f7;
   --widget-outline: #c2ccd8;
   --widget-text: #1c2530;
@@ -119,9 +119,15 @@ html, body {
 /* Same drop shadow as the litegraph blocks (canvas: offset 2,2 / blur 3 / rgba(0,0,0,.5)). */
 .jsPanel { font-family: inherit; box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5) !important; }
 /* Close button: 2px smaller than the "xs" size (1rem→14px) and not bold. */
-.jsPanel-controlbar .jsPanel-btn-close { font-weight: 400 !important; }
-.jsPanel-controlbar .jsPanel-btn-close span:not(.material-icons),
-.jsPanel-controlbar .jsPanel-btn-close svg:not(.svg-inline--fa) { width: 14px !important; height: 14px !important; }
+/* Nudge the control button down 4px. */
+.jsPanel-controlbar .jsPanel-btn { margin: 4px 0px 0px 0px !important; }
+/* Close X icon size. */
+.jsPanel-controlbar .jsPanel-btn-close svg:not(.svg-inline--fa) { width: 20px !important; height: 20px !important; }
+/* Override jsPanel's xs control sizing — tight icon, no margin. */
+.jsPanel-controlbar .jsPanel-btn.jsPanel-btn-xs span:not(.material-icons),
+.jsPanel-controlbar .jsPanel-btn.jsPanel-btn-xs svg:not(.svg-inline--fa) { width: 1rem; height: 1rem; margin: 0px; }
+/* Panel title TEXT comes down ~4px (the icon + close button stay put). */
+.jsPanel-title .pttxt { position: relative; top: 2px; }
 .jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); border-top-left-radius: 8px; border-top-right-radius: 8px; height: 30px; }
 .jsPanel .jsPanel-titlebar { height: 30px; } /* match the litegraph block title height (30px) */
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
@@ -155,8 +161,8 @@ html, body {
 }
 .palette-item:hover { background: var(--item-bg-hover); }
 .palette-item:active { cursor: grabbing; }
-.palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; }
-.palette-item .icon svg { width: 100%; height: 100%; display: block; }
+.palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.palette-item .icon svg, .palette-item .icon img { display: block; } /* size comes from the icon's own width/height (per-icon scale) */
 .palette-item .swatch {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;
 }

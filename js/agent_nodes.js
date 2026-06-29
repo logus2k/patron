@@ -25,10 +25,11 @@
 
   const COLOR = "#5aa17c"; // agent-node title color — softer/pastel green (was #2f7d52)
 
-  const MIN_W = 240, MAX_W = 560; // width has a usable range; height is locked to content
+  const MIN_W = 180, MAX_W = 560; // width has a usable range; height is locked to content
+  const VAL_SLOT = 48; // fixed space reserved for a widget's value (it truncates, not the floor)
 
-  // Width to fit the widest widget's [label … value], clamped to [MIN_W, MAX_W] so the
-  // label and value never overlap (and the node never gets absurdly wide).
+  // Width to fit the widest widget's LABEL + a fixed value slot (so the label never overlaps
+  // the value), clamped to [MIN_W, MAX_W]. Long values truncate rather than widening the node.
   function contentWidth(node) {
     const ctx = contentWidth._ctx ||
       (contentWidth._ctx = document.createElement("canvas").getContext("2d"));
@@ -37,9 +38,8 @@
     let w = MIN_W;
     for (const wd of node.widgets || []) {
       const label = String(wd.label || wd.name || "");
-      const val = wd.value == null ? "" : String(wd.value);
       const arrows = (wd.type === "number" || wd.type === "combo") ? 40 : 0; // ◀ ▶ chrome
-      const need = ctx.measureText(label).width + ctx.measureText(val).width + 56 + arrows;
+      const need = ctx.measureText(label).width + VAL_SLOT + 44 + arrows;
       if (need > w) w = need;
     }
     return Math.round(Math.max(MIN_W, Math.min(MAX_W, w)));
@@ -89,6 +89,17 @@
       if (global.PatronIcons && global.PatronIcons.has(this.type)) {
         global.PatronIcons.drawTitleBox(ctx, this.type, title_height);
       }
+    };
+    // Title bar background shows ONLY when the node is selected; otherwise the title
+    // blends into the body (litegraph calls onDrawTitleBar instead of its default fill).
+    node.onDrawTitleBar = function (ctx, title_height, size, scale, fgcolor) {
+      if (!this.is_selected) return;
+      ctx.fillStyle = this.color || fgcolor;
+      ctx.beginPath();
+      const r = this.round_radius || 8;
+      if (ctx.roundRect) ctx.roundRect(0, -title_height, size[0] + 1, title_height, [r, r, 0, 0]);
+      else ctx.rect(0, -title_height, size[0] + 1, title_height);
+      ctx.fill();
     };
   }
   function textW(node, name) {

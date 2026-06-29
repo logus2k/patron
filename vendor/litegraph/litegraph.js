@@ -9099,7 +9099,7 @@ LGraphNode.prototype.executeAction = function(action)
 			{
 				ctx.shadowColor = "transparent";
 				ctx.fillStyle = "rgba(0,0,0,0.2)";
-				ctx.fillRect(0, -1, area[2], 2);
+				ctx.fillRect(0, -0.5, area[2], 0.5); /* PATRON: thinner title/body separator (0.5px) */
 			}
         }
         ctx.shadowColor = "transparent";
@@ -9300,7 +9300,7 @@ LGraphNode.prototype.executeAction = function(action)
                 area[1] -= title_height;
                 area[3] += title_height;
             }
-            ctx.lineWidth = 3;       /* PATRON: thicker selection border (was 1) */
+            ctx.lineWidth = 2;       /* PATRON: selection border (was 1) */
             ctx.globalAlpha = 1;     /* PATRON: solid selection border (was 0.8) */
             ctx.beginPath();
             if (shape == LiteGraph.BOX_SHAPE) {

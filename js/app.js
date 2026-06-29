@@ -86,10 +86,12 @@
   lgcanvas.render_canvas_border = false;
   // Hide litegraph's bottom-left debug overlay (T/I/N/V/FPS counters) — dev noise here.
   lgcanvas.show_info = false;
+  // Thinner connection links (litegraph default 3 → 2).
+  lgcanvas.connections_width = 2;
 
   // Use the vendored Roboto for canvas node text too (litegraph defaults to Arial). The
   // canvas paints before the @font-face TTF finishes loading, so repaint once it's ready.
-  lgcanvas.title_text_font = "" + LiteGraph.NODE_TEXT_SIZE + "px 'Roboto', sans-serif";
+  lgcanvas.title_text_font = "12px 'Roboto', sans-serif"; // 1px under the panel title (zoom magnifies canvas)
   lgcanvas.inner_text_font = "normal " + LiteGraph.NODE_SUBTEXT_SIZE + "px 'Roboto', sans-serif";
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => lgcanvas.setDirty(true, true));
@@ -544,11 +546,18 @@
   menuBar.registerCommand("view.theme", toggleTheme);
   menuBar.registerCommand("help.about", showAbout);
 
-  // Lucide-style line icon for a panel header (inherits the title color via currentColor).
-  const panelIcon = (paths) =>
-    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
-    ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' +
-    ' style="vertical-align:-3px;margin-right:7px">' + paths + "</svg>";
+  // jsPanel's default close icon is a heavy FILLED "✕"; swap it for a thin stroked X so it
+  // reads lighter. Set globally before any panel is created (covers all panels).
+  if (typeof jsPanel !== "undefined" && jsPanel.icons) {
+    jsPanel.icons.close =
+      '<svg focusable="false" class="jsPanel-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21">' +
+      '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="m7.5 7.5l6 6m0-6l-6 6"></path></svg>';
+  }
+
+  // Colored file icon (icons/*.svg) for a panel header.
+  const panelImg = (src, size) =>
+    '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) +
+    '" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
   let toolboxPanel = null;
@@ -558,7 +567,7 @@
       return;
     }
     toolboxPanel = jsPanel.create({
-      headerTitle: panelIcon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>') + "Toolbox",
+      headerTitle: panelImg("icons/tool-box.svg", 20) + '<span class="pttxt">Toolbox</span>',
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
@@ -589,7 +598,7 @@
       return;
     }
     outputPanel = jsPanel.create({
-      headerTitle: panelIcon('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>') + "Output",
+      headerTitle: panelImg("icons/json.svg") + '<span class="pttxt">Output</span>',
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",

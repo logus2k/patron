@@ -13,6 +13,7 @@ COPY index.html serve.py ./
 COPY js/ ./js/
 COPY css/ ./css/
 COPY fonts/ ./fonts/
+COPY icons/ ./icons/
 COPY vendor/ ./vendor/
 
 # serve.py listens on 8088, bound to 0.0.0.0 inside the container by default.
