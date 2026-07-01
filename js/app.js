@@ -411,6 +411,7 @@
           toolbox: panelRect(toolboxPanel),
           output: panelRect(outputPanel),
           props: panelRect(window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null),
+          mcp: window.PatronProps && window.PatronProps.mcpRect ? window.PatronProps.mcpRect() : null,
         },
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
         zoomVisible: zoomCtl.style.display !== "none",
@@ -443,12 +444,21 @@
     }
     const panels = ui.panels || {};
     applyPanelRect(toolboxPanel, panels.toolbox);
+    // Output is a transient results panel (opened on demand via 📄 Output / Compile): restore
+    // its position/size but keep it HIDDEN by default, regardless of last-saved visibility.
     applyPanelRect(outputPanel, panels.output);
+    if (outputPanel) outputPanel.style.display = "none";
+    if (menuBar) menuBar.setContext("outputVisible", false);
     // Properties panel is created lazily by props-panel.js — stash its saved rect so it can
     // position itself from it (and apply now if it already exists).
     if (window.PatronApp) window.PatronApp.propsRect = panels.props || null;
     const propsEl = window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null;
     if (propsEl) applyPanelRect(propsEl, panels.props);
+    // MCP Tools panel is created on demand (props-panel.js ensureMcpPanel reads this rect to
+    // position/size itself). Stash it; apply now if it happens to be open.
+    if (window.PatronApp) window.PatronApp.mcpRect = panels.mcp || null;
+    const mcpEl = window.PatronProps && window.PatronProps.mcpPanel ? window.PatronProps.mcpPanel() : null;
+    if (mcpEl) applyPanelRect(mcpEl, panels.mcp);
     if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
     // Zoom control visibility (default visible).
     const zv = ui.zoomVisible !== false;

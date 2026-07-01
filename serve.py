@@ -33,6 +33,10 @@ DEPLOY_API = "/api/deploy"
 # gated under /patron) uses the ONE authoritative Block model instead of a JS copy.
 COMPOSER_CATALOG = "/composer/catalog"
 COMPOSER_COMPILE = "/composer/compile"
+# Grounded pickers: the editor reads real channel targets from the runtime admin API.
+WA_TARGETS = "/admin/channels/whatsapp/targets"
+# Grounded pickers: the editor reads the real MCP tool catalog from the runtime admin API.
+MCP_TOOLS = "/admin/channels/mcp/tools"
 # agent_runtime admin API (localhost-published by its compose: 127.0.0.1:6817).
 RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstrip("/")
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
@@ -72,6 +76,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {})  # no/corrupt workspace -> empty
         if self.path.split("?")[0] == COMPOSER_CATALOG:
             return self._proxy_get(f"{RUNTIME_URL}{COMPOSER_CATALOG}")
+        if self.path.split("?")[0] == WA_TARGETS:
+            return self._proxy_get(f"{RUNTIME_URL}{WA_TARGETS}")
+        if self.path.split("?")[0] == MCP_TOOLS:
+            return self._proxy_get(f"{RUNTIME_URL}{MCP_TOOLS}")
         return super().do_GET()
 
     def _proxy_get(self, url):

@@ -14,7 +14,7 @@
   // type id -> { file } (colored svg, as-is) | { color, paths } (recolorable Lucide line)
   const ICONS = {
     "trigger":   { file: "icons/clock-alarm-20.svg" },
-    "agent":     { file: "icons/assistant.svg" },
+    "agent":     { file: "icons/robot.svg" },
     "transform": { file: "icons/arrow-transfer-horizontal-square.svg" },
     "branch":    { file: "icons/nodes-right.svg" },
     "loop":      { file: "icons/arrow-transfer-horizontal-square.svg" },

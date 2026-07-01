@@ -155,6 +155,7 @@
         //render inputs and outputs
         if (!node.flags.collapsed) {
             //input connection slots
+            ctx.strokeStyle = "black"; /* PATRON: inputs get the SAME dot border as outputs (was output-only) */
             if (node.inputs) {
                 for (var i = 0; i < node.inputs.length; i++) {
                     var slot = node.inputs[i];
@@ -235,6 +236,8 @@
 	                        ctx.arc(pos[0], pos[1], 4, 0, Math.PI * 2);
                     }
                     ctx.fill();
+                    if(!low_quality && doStroke) /* PATRON: match the output dot border */
+                        ctx.stroke();
 
                     //render name
                     if (render_text) {

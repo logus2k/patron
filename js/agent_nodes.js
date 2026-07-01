@@ -101,29 +101,42 @@
     };
   }
 
-  // Custom read-only field renderer: a "label ........ value" row with SUBTLE corners (not
-  // litegraph's full-pill radius). Used for every field, since values are edited only in the
-  // Properties panel. litegraph calls w.draw for unknown widget types (the switch default).
+  // Read-only field renderer: a flat "label ......... value" row — NO box/border/fill, so it
+  // reads as a spec sheet, not an editable input (values are edited ONLY in the Properties
+  // panel). A hairline divider gives subtle structure. litegraph calls w.draw for unknown
+  // widget types (the switch default).
   function drawField(ctx, node, widget_width, y, H) {
-    const w = this, margin = 15, r = 4;
+    const w = this, margin = 15;
     ctx.save();
     ctx.font = "normal " + ((typeof LiteGraph !== "undefined" && LiteGraph.NODE_SUBTEXT_SIZE) || 12) + "px Arial";
-    ctx.fillStyle = LiteGraph.WIDGET_BGCOLOR;
+    // hairline divider at the row's baseline (very subtle; no input-like outline)
     ctx.strokeStyle = LiteGraph.WIDGET_OUTLINE_COLOR;
+    ctx.globalAlpha = 0.3;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(margin, y, widget_width - margin * 2, H, [r]);
-    else ctx.rect(margin, y, widget_width - margin * 2, H);
-    ctx.fill();
+    ctx.moveTo(margin, y + H - 0.5);
+    ctx.lineTo(widget_width - margin, y + H - 0.5);
     ctx.stroke();
-    ctx.save();
-    ctx.beginPath(); ctx.rect(margin, y, widget_width - margin * 2, H); ctx.clip();
+    ctx.globalAlpha = 1;
+    // label (muted, left) … value (emphasis, right). The value is TRUNCATED to the space left
+    // after the label (+ a gap) so a long value can never overlap the label.
+    const baseline = y + H * 0.7;
+    const labelText = String(w.label || w.name);
     ctx.fillStyle = LiteGraph.WIDGET_SECONDARY_TEXT_COLOR;
     ctx.textAlign = "left";
-    ctx.fillText(w.label || w.name, margin * 2, y + H * 0.7);
+    ctx.fillText(labelText, margin, baseline);
+    const gap = 14;
+    const rightX = widget_width - margin;
+    const availW = rightX - (margin + ctx.measureText(labelText).width + gap);
+    let val = String(w.value == null ? "" : w.value);
+    if (availW <= 4) {
+      val = ""; // no room (very long label) — show nothing rather than overlap
+    } else if (ctx.measureText(val).width > availW) {
+      while (val.length && ctx.measureText(val + "…").width > availW) val = val.slice(0, -1);
+      val += "…";
+    }
     ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
     ctx.textAlign = "right";
-    ctx.fillText(String(w.value == null ? "" : w.value).substr(0, 32), widget_width - margin * 2, y + H * 0.7);
-    ctx.restore();
+    ctx.fillText(val, rightX, baseline);
     ctx.restore();
   }
   global.PatronDrawField = drawField;
@@ -161,7 +174,9 @@
     // --- Trigger: boundary source; carries the agent id + schedule ------------
     function Trigger() {
       this.addOutput("out", TYPES.FLOW);
-      this.addProperty("agent_id", "news-morning-ai");
+      // Generic defaults for a FRESH block. The News Agent's concrete values live only in
+      // its fixture (examples/news-agent.graph.json), loaded by loadNewsAgent — NOT baked here.
+      this.addProperty("agent_id", "");
       this.addProperty("trigger_type", "schedule");
       this.addProperty("cron", "0 7 * * *");
       this.addProperty("timezone", "");
@@ -178,13 +193,14 @@
     function Agent() {
       this.addInput("in", TYPES.FLOW);
       this.addOutput("out", TYPES.FLOW);
-      this.addProperty("persona", "news_curator");
+      // Generic defaults for a FRESH Agent — NOT the News Agent's values (those live only
+      // in the fixture, loaded by loadNewsAgent). A new agent starts blank + sensible.
+      this.addProperty("persona", "");
       this.addProperty("temperature", 0.3);
       this.addProperty("max_tokens", 1024);
-      this.addProperty("input_template", "Curate the {n} best morning headlines about {topic}.");
-      this.addProperty("input_vars", '{"n": 5, "topic": "AI agents"}');
-      this.addProperty("tools_server", "mcp");
-      this.addProperty("tools_allow", "mcp__newsapi_search, mcp__fetch_url");
+      this.addProperty("input_template", "");
+      this.addProperty("input_vars", "{}");
+      this.addProperty("tools_allow", "");
       this.addProperty("tools_max_rounds", 3);
       this.addProperty("memory", "none");
       // Agent-level metadata + optional capabilities: stored as properties (so they
@@ -198,7 +214,6 @@
       numW(this, "max_tokens", 1, null, 0);
       textW(this, "input_template");
       textW(this, "input_vars");
-      textW(this, "tools_server");
       textW(this, "tools_allow");
       numW(this, "tools_max_rounds", 1, null, 0);
       comboW(this, "memory", ["none", "thread_window"]);
@@ -259,29 +274,36 @@
     function destination(channel, defaultTarget, targetLabel) {
       function Dest() {
         this.addInput("in", TYPES.FLOW);
+        this.addProperty("target_name", "");
         this.addProperty("target", defaultTarget);
-        // The widget KEY is the property name ("target") so the Properties panel + syncWidgets
-        // map it correctly; the friendly hint ("chat id"/…) is a display-only label.
+        // Friendly name FIRST (name before id), then the raw id. Both widget KEYs are the
+        // property names so the Properties panel + syncWidgets map them correctly; the labels
+        // ("name" / "chat id") are display-only.
+        const wn = this.addWidget("text", "target_name", this.properties.target_name, (v) => (this.properties.target_name = v));
+        wn.label = "name";
+        wn.editKind = "text";
+        wn.type = "patron/field";
+        wn.draw = global.PatronDrawField;
         const w = this.addWidget("text", "target", this.properties.target, (v) => (this.properties.target = v));
         w.label = targetLabel || "target";
         w.editKind = "text";
         w.type = "patron/field";
         w.draw = global.PatronDrawField;
-        this.color = DEST;
-        this.size = [200, 60];
-        iconize(this);
-        const base = this.configure;
-        this.configure = function (info) { base.call(this, info); this.color = DEST; syncWidgets(this); };
+        // Size from content (like every other block) so BOTH fields fit with proper bottom
+        // margin — the old hard-coded height left the 2nd field flush against the border.
+        apply(this, DEST);
       }
       Dest.title = channel.charAt(0).toUpperCase() + channel.slice(1);
       Dest.desc = "Destination: deliver via " + channel + ".";
       return Dest;
     }
-    const WhatsApp = destination("whatsapp", "351961050313@c.us", "chat id");
+    // Blank targets on a FRESH block (the concrete target is picked in the panel / lives in
+    // the fixture); the label is the placeholder hint.
+    const WhatsApp = destination("whatsapp", "", "chat id");
     WhatsApp.title = "WhatsApp";
-    const Tts = destination("tts", "default", "voice/session");
+    const Tts = destination("tts", "", "voice/session");
     Tts.title = "TTS";
-    const Bus = destination("bus", "ops-dashboard", "stream id");
+    const Bus = destination("bus", "", "stream id");
     Bus.title = "Bus";
 
     const REGISTRY = [
