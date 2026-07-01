@@ -91,11 +91,46 @@
 
   // Use the vendored Roboto for canvas node text too (litegraph defaults to Arial). The
   // canvas paints before the @font-face TTF finishes loading, so repaint once it's ready.
-  lgcanvas.title_text_font = "12px 'Roboto', sans-serif"; // 1px under the panel title (zoom magnifies canvas)
+  lgcanvas.title_text_font = "13px 'Roboto', sans-serif"; // = panel title (13px); exact match at 100% zoom
   lgcanvas.inner_text_font = "normal " + LiteGraph.NODE_SUBTEXT_SIZE + "px 'Roboto', sans-serif";
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => lgcanvas.setDirty(true, true));
   }
+
+  // Zoom control (bottom-left): [−] [editable %] [+]. Zooms around the viewport center;
+  // visibility toggles from the View menu and persists in the server workspace (no localStorage).
+  function setZoom(target) {
+    const ds = lgcanvas.ds;
+    if (!ds) return;
+    const rect = (lgcanvas.canvas || canvasEl).getBoundingClientRect();
+    ds.changeScale(target, [rect.width / 2, rect.height / 2]); // clamps to [min,max] internally
+    lgcanvas.setDirty(true, true);
+    scheduleSave();
+  }
+  const zoomCtl = document.createElement("div");
+  zoomCtl.id = "zoom-control";
+  const zMinus = document.createElement("button"); zMinus.className = "zc-btn"; zMinus.textContent = "−"; zMinus.title = "Zoom out";
+  const zVal = document.createElement("input"); zVal.id = "zc-value"; zVal.type = "text"; zVal.spellcheck = false; zVal.title = "Zoom — type a % and press Enter";
+  const zPlus = document.createElement("button"); zPlus.className = "zc-btn"; zPlus.textContent = "+"; zPlus.title = "Zoom in";
+  zoomCtl.append(zMinus, zVal, zPlus);
+  document.body.appendChild(zoomCtl);
+  zMinus.addEventListener("click", () => setZoom(lgcanvas.ds.scale / 1.1));
+  zPlus.addEventListener("click", () => setZoom(lgcanvas.ds.scale * 1.1));
+  zVal.addEventListener("focus", () => zVal.select());
+  zVal.addEventListener("keydown", (e) => { if (e.key === "Enter") zVal.blur(); });
+  zVal.addEventListener("change", () => { const v = parseFloat(zVal.value); if (isFinite(v) && v > 0) setZoom(v / 100); });
+  function toggleZoomControl() {
+    const vis = zoomCtl.style.display === "none";
+    zoomCtl.style.display = vis ? "" : "none";
+    if (menuBar) { menuBar.setContext("zoomVisible", vis); if (menuBar.refresh) menuBar.refresh(); }
+    scheduleSave();
+  }
+  let _lastZoom = null;
+  (function tickZoom() {
+    const z = Math.round(((lgcanvas.ds && lgcanvas.ds.scale) || 1) * 100);
+    if (z !== _lastZoom && document.activeElement !== zVal) { _lastZoom = z; zVal.value = z + "%"; }
+    requestAnimationFrame(tickZoom);
+  })();
 
   // Sizing: let litegraph's own resize() own the canvas bitmap — it reads the
   // parent size, resizes BOTH the fg + bg canvases, and no-ops when unchanged.
@@ -257,25 +292,46 @@
 
   // Build the News Agent from the runtime-aligned nodes (their defaults already
   // hold the News Agent config — see js/agent_nodes.js).
-  function loadNewsAgent() {
-    graph.clear();
-    for (const k in inspectState) delete inspectState[k];
-    const trig = spawnNode("patron/agent/trigger", [40, 200]);
-    const tools = spawnNode("patron/agent/tools", [40, 360]);
-    const brain = spawnNode("patron/agent/brain", [340, 210]);
-    const deliv = spawnNode("patron/agent/deliver", [640, 240]);
-    const wa = spawnNode("patron/dest/whatsapp", [860, 240]);
-    trig.connect(0, brain, 0);   // task   -> brain.in
-    tools.connect(0, brain, 1);  // tools  -> brain.tools
-    brain.connect(0, deliv, 0);  // result -> deliver
-    deliv.connect(0, wa, 0);     // deliver -> WhatsApp destination
-    graph.setDirtyCanvas(true, true);
-    inspectOut.textContent = "News Agent loaded (Trigger → Brain(+Tools) → Deliver → WhatsApp). Press ⚙ Compile → DSL.";
+  // Load the News Agent from its source-of-truth graph file (examples/news-agent.graph.json),
+  // not reconstructed from node defaults — so the demo always matches the real fixture the
+  // runtime lowers. NEW vocabulary: Trigger → Agent (tools as config) → WhatsApp.
+  async function loadNewsAgent() {
+    try {
+      const res = await fetch("examples/news-agent.graph.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const g = await res.json();
+      graph.clear();
+      for (const k in inspectState) delete inspectState[k];
+      graph.configure(g);
+      graph.setDirtyCanvas(true, true);
+      inspectOut.textContent = "News Agent loaded (Trigger → Agent → WhatsApp). Build → Compile → DSL.";
+    } catch (e) {
+      inspectOut.textContent = "Could not load examples/news-agent.graph.json: " + e.message;
+      showOutput();
+    }
+  }
+
+  // Lower the current graph via the AUTHORITATIVE server contract: agent_runtime's
+  // /composer/compile (the one Block model), proxied same-origin by serve.py. There is
+  // no in-browser compiler — the backend OWNS the contract (no legacy, no duplication).
+  // Returns { ok, dsl, schedule } | { ok:false, errors } | { ok:false, unreachable:true }.
+  async function compileGraph() {
+    try {
+      const res = await fetch("composer/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(graph.serialize()),
+      });
+      if (res.ok) return await res.json();
+      return { ok: false, errors: ["/composer/compile HTTP " + res.status] };
+    } catch (e) {
+      return { ok: false, unreachable: true, errors: ["cannot reach agent_runtime (/composer/compile) — is the runtime up?"] };
+    }
   }
 
   // Lower the current graph to the runtime record + scheduler-job spec and show both.
-  function compileToDsl() {
-    const out = global.PatronCompile.compile(graph.serialize());
+  async function compileToDsl() {
+    const out = await compileGraph();
     if (out.ok) {
       inspectOut.textContent =
         "// agent record + schedule (what Deploy writes to runtime + scheduler)\n" +
@@ -289,7 +345,7 @@
   // Deploy: compile, then push BOTH records via serve.py's bridge — the agent record to
   // agent_runtime and (if scheduled) the cron job to agent_scheduler, linked by uid.
   async function deployToRuntime() {
-    const out = global.PatronCompile.compile(graph.serialize());
+    const out = await compileGraph();
     if (!out.ok) {
       inspectOut.textContent = "// cannot deploy — fix the compile errors first:\n- " + out.errors.join("\n- ");
       showOutput();
@@ -357,6 +413,7 @@
           props: panelRect(window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null),
         },
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
+        zoomVisible: zoomCtl.style.display !== "none",
       },
     };
   }
@@ -378,6 +435,10 @@
     const propsEl = window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null;
     if (propsEl) applyPanelRect(propsEl, panels.props);
     if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
+    // Zoom control visibility (default visible).
+    const zv = ui.zoomVisible !== false;
+    zoomCtl.style.display = zv ? "" : "none";
+    if (menuBar) menuBar.setContext("zoomVisible", zv);
     graph.setDirtyCanvas(true, true);
     // Restore the previous selection (auto-save captures it on pointerup).
     if (Array.isArray(ui.selected) && ui.selected.length && lgcanvas.selectNodes) {
@@ -473,6 +534,8 @@
     // selection outline around a node — same color as the node's selected (lit-up) edges
     // so the border and links read as one. (litegraph hardcodes #FFF → invisible on white.)
     LiteGraph.NODE_BOX_OUTLINE_COLOR = cssVar("--link-highlight", "#ffb02e");
+    // 1px node border matching the panels' border (litegraph doesn't stroke one by default).
+    LiteGraph.NODE_BORDER_COLOR = cssVar("--panel-border", "#d8dee6");
     // Selected-node title text — dark, so it reads on the soft pastel green / slate title bar
     // (litegraph defaults it to white). The bar color is theme-independent, so use one value.
     LiteGraph.NODE_SELECTED_TITLE_COLOR = "#233040";
@@ -550,6 +613,7 @@
   menuBar.setContext("isDark", document.documentElement.dataset.theme === "dark");
   menuBar.setContext("isLight", document.documentElement.dataset.theme !== "dark");
   menuBar.setContext("toolboxVisible", true);
+  menuBar.setContext("zoomVisible", true);
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
@@ -562,6 +626,7 @@
   menuBar.registerCommand("build.compile", compileToDsl);
   menuBar.registerCommand("build.deploy", deployToRuntime);
   menuBar.registerCommand("view.toolbox", toggleToolbox);
+  menuBar.registerCommand("view.zoom", toggleZoomControl);
   menuBar.registerCommand("view.output", toggleOutput);
   menuBar.registerCommand("view.theme", toggleTheme);
   menuBar.registerCommand("help.about", showAbout);

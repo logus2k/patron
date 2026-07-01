@@ -7,14 +7,17 @@ FROM python:3.12-alpine
 
 WORKDIR /app
 
-# App files only — data/, .git, the venv, docs, examples and tests are excluded
-# via .dockerignore and intentionally NOT copied (data/ is a runtime volume).
+# App files only — data/, .git, the venv, docs and tests are excluded via
+# .dockerignore and intentionally NOT copied (data/ is a runtime volume). examples/
+# IS copied: loadNewsAgent loads examples/news-agent.graph.json as the source-of-truth
+# demo graph (not reconstructed from node defaults).
 COPY index.html serve.py ./
 COPY js/ ./js/
 COPY css/ ./css/
 COPY fonts/ ./fonts/
 COPY icons/ ./icons/
 COPY vendor/ ./vendor/
+COPY examples/ ./examples/
 
 # serve.py listens on 8088, bound to 0.0.0.0 inside the container by default.
 EXPOSE 8088

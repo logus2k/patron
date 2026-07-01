@@ -29,6 +29,10 @@ DATA = os.path.join(ROOT, "data")
 WORKSPACE = os.path.join(DATA, "workspace.json")
 API = "/api/workspace"
 DEPLOY_API = "/api/deploy"
+# Composer contract endpoints — proxied to agent_runtime so the browser (same-origin,
+# gated under /patron) uses the ONE authoritative Block model instead of a JS copy.
+COMPOSER_CATALOG = "/composer/catalog"
+COMPOSER_COMPILE = "/composer/compile"
 # agent_runtime admin API (localhost-published by its compose: 127.0.0.1:6817).
 RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstrip("/")
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
@@ -66,7 +70,20 @@ class Handler(SimpleHTTPRequestHandler):
                 except (json.JSONDecodeError, OSError):
                     pass
             return self._json(200, {})  # no/corrupt workspace -> empty
+        if self.path.split("?")[0] == COMPOSER_CATALOG:
+            return self._proxy_get(f"{RUNTIME_URL}{COMPOSER_CATALOG}")
         return super().do_GET()
+
+    def _proxy_get(self, url):
+        """Relay a GET to a localhost-bound backend (the browser can't reach it)."""
+        try:
+            status, body = _http("GET", url)
+            return self._json(status, body if body is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"upstream {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def do_PUT(self):
         if self.path.split("?")[0] == API:
@@ -87,7 +104,26 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?")[0] == DEPLOY_API:
             return self._deploy()
+        if self.path.split("?")[0] == COMPOSER_COMPILE:
+            return self._proxy_post(f"{RUNTIME_URL}{COMPOSER_COMPILE}")
         self.send_error(405, "Method Not Allowed")
+
+    def _proxy_post(self, url):
+        """Relay a POST body to a localhost-bound backend and return its response."""
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        try:
+            status, resp = _http("POST", url, body)
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"upstream {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def _deploy(self):
         """Deploy a compiled agent to BOTH backends: upsert the agent record in

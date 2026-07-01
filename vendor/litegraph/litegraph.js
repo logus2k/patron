@@ -8646,7 +8646,7 @@ LGraphNode.prototype.executeAction = function(action)
 
         //connection slots
         ctx.textAlign = horizontal ? "center" : "left";
-        ctx.font = "normal small-caps " + (LiteGraph.NODE_SUBTEXT_SIZE - 1) + "px 'Roboto', sans-serif"; /* PATRON: small-caps connector labels, 1px smaller */
+        ctx.font = this.inner_text_font;
 
         var render_text = !low_quality;
 
@@ -8749,7 +8749,7 @@ LGraphNode.prototype.executeAction = function(action)
                             if (horizontal || slot.dir == LiteGraph.UP) {
                                 ctx.fillText(text, pos[0], pos[1] - 10);
                             } else {
-                                ctx.fillText(text, pos[0] + 10, pos[1] + 3); /* PATRON: up 2px to align with the slot dot */
+                                ctx.fillText(text, pos[0] + 10, pos[1] + 5);
                             }
                         }
                     }
@@ -8856,7 +8856,7 @@ LGraphNode.prototype.executeAction = function(action)
                             if (horizontal || slot.dir == LiteGraph.DOWN) {
                                 ctx.fillText(text, pos[0], pos[1] - 8);
                             } else {
-                                ctx.fillText(text, pos[0] - 10, pos[1] + 3); /* PATRON: up 2px to align with the slot dot */
+                                ctx.fillText(text, pos[0] - 10, pos[1] + 5);
                             }
                         }
                     }
@@ -8867,13 +8867,12 @@ LGraphNode.prototype.executeAction = function(action)
             ctx.globalAlpha = 1;
 
             if (node.widgets) {
-				var widgets_y = max_y + 5; /* PATRON: +5px gap between connector labels and first widget */
+				var widgets_y = max_y;
                 if (horizontal || node.widgets_up) {
                     widgets_y = 2;
                 }
 				if( node.widgets_start_y != null )
                     widgets_y = node.widgets_start_y;
-                ctx.font = this.inner_text_font; /* PATRON: reset — small-caps is ONLY for connector labels, not widgets */
                 this.drawNodeWidgets(
                     node,
                     widgets_y,
@@ -9100,7 +9099,7 @@ LGraphNode.prototype.executeAction = function(action)
 			{
 				ctx.shadowColor = "transparent";
 				ctx.fillStyle = "rgba(0,0,0,0.2)";
-				ctx.fillRect(0, -0.5, area[2], 0.5); /* PATRON: thinner title/body separator (0.5px) */
+				ctx.fillRect(0, -1, area[2], 2);
 			}
         }
         ctx.shadowColor = "transparent";
@@ -9301,34 +9300,34 @@ LGraphNode.prototype.executeAction = function(action)
                 area[1] -= title_height;
                 area[3] += title_height;
             }
-            ctx.lineWidth = 2;       /* PATRON: selection border (was 1) */
-            ctx.globalAlpha = 1;     /* PATRON: solid selection border (was 0.8) */
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.8;
             ctx.beginPath();
             if (shape == LiteGraph.BOX_SHAPE) {
                 ctx.rect(
-                    area[0],
-                    area[1],
-                    area[2],
-                    area[3]
+                    -6 + area[0],
+                    -6 + area[1],
+                    12 + area[2],
+                    12 + area[3]
                 );
             } else if (
                 shape == LiteGraph.ROUND_SHAPE ||
                 (shape == LiteGraph.CARD_SHAPE && node.flags.collapsed)
             ) {
                 ctx.roundRect(
-                    area[0],
-                    area[1],
-                    area[2],
-                    area[3],
-                    [this.round_radius]
+                    -6 + area[0],
+                    -6 + area[1],
+                    12 + area[2],
+                    12 + area[3],
+                    [this.round_radius * 2]
                 );
             } else if (shape == LiteGraph.CARD_SHAPE) {
                 ctx.roundRect(
-                    area[0],
-                    area[1],
-                    area[2],
-                    area[3],
-                    [this.round_radius,2,this.round_radius,2]
+                    -6 + area[0],
+                    -6 + area[1],
+                    12 + area[2],
+                    12 + area[3],
+                    [this.round_radius * 2,2,this.round_radius * 2,2]
                 );
             } else if (shape == LiteGraph.CIRCLE_SHAPE) {
                 ctx.arc(
@@ -9518,7 +9517,7 @@ LGraphNode.prototype.executeAction = function(action)
             color = this.default_link_color;
         }
         if (link != null && this.highlighted_links[link.id]) {
-            color = LiteGraph.LINK_HIGHLIGHT_COLOR || "#FFF"; // PATRON: themeable (default = original #FFF)
+            color = "#FFF";
         }
 
         start_dir = start_dir || LiteGraph.RIGHT;
@@ -13371,7 +13370,7 @@ LGraphNode.prototype.executeAction = function(action)
         };
 
 		if(node)
-			options.title = node.getTitle ? node.getTitle() : (node.title || node.type); /* PATRON: friendly title, not the internal type path */
+			options.title = node.type;
 
         //check if mouse is in input
         var slot = null;

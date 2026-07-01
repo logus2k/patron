@@ -5,7 +5,6 @@
 .venv_patron/
 data/
 documents/
-examples/
 test/
 **/__pycache__/
 *.pyc

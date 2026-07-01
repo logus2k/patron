@@ -29,6 +29,9 @@
 
     <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>
+    <!-- Patron's litegraph customizations as prototype overrides (keeps the vendored
+         litegraph.js byte-pristine / drop-in updatable — see js/litegraph-patches.js) -->
+    <script src="js/litegraph-patches.js"></script>
     <!-- edge resize cursors + width-resize + crosshair fix (must load before app.js) -->
     <script src="js/node-resize.js"></script>
     <!-- per-block filled/colored SVG icons (title box + toolbox); load before app.js -->
@@ -38,10 +41,8 @@
     <script src="vendor/jspanel/jspanel.min.js"></script>
     <!-- GoF pattern nodes (conceptual inspiration) -->
     <script src="js/patterns.js"></script>
-    <!-- runtime-aligned agent nodes (the real authoring vocabulary) -->
+    <!-- composer authoring vocabulary (node types == agent_runtime composer blocks) -->
     <script src="js/agent_nodes.js"></script>
-    <!-- draft compiler: graph -> runtime DSL (provisional, re-pointed when the DSL hardens) -->
-    <script src="js/compile.js"></script>
     <!-- pull-down menu bar (vendored from noted) + its data model -->
     <script src="js/MenuBar.js"></script>
     <script src="js/menu.js"></script>

@@ -73,7 +73,7 @@
     const wrap = document.createElement("label");
     wrap.style.cssText = "display:flex;flex-direction:column;gap:3px;margin-bottom:10px";
     const cap = document.createElement("span");
-    cap.textContent = w.name;
+    cap.textContent = w.label || w.name;   // friendly label (e.g. "chat id"); key stays w.name
     cap.style.cssText = "opacity:.65;font-size:12px";
     wrap.appendChild(cap);
 
@@ -85,23 +85,27 @@
       if (window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
     };
 
+    // The canvas widget is a display-only text widget; its real editing type is carried on
+    // w.editKind (+ editValues/editMin/editMax). Fall back to w.type for any plain widget.
+    const kind = w.editKind || w.type;
+    const values = w.editValues || (w.options && w.options.values);
     let input;
-    if (w.type === "combo" && w.options && Array.isArray(w.options.values)) {
+    if (kind === "combo" && Array.isArray(values)) {
       input = document.createElement("select");
-      for (const v of w.options.values) {
+      for (const v of values) {
         const o = document.createElement("option");
         o.value = v; o.textContent = v;
         input.appendChild(o);
       }
       input.value = w.value;
       input.addEventListener("change", () => commit(input.value));
-    } else if (w.type === "toggle") {
+    } else if (kind === "toggle") {
       input = document.createElement("input");
       input.type = "checkbox";
       input.checked = !!w.value;
       input.addEventListener("change", () => commit(input.checked));
     } else {
-      const num = w.type === "number";
+      const num = kind === "number";
       input = document.createElement("input");
       input.type = "text";
       input.value = w.value == null ? "" : String(w.value);

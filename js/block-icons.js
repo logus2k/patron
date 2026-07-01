@@ -10,17 +10,18 @@
 (function (global) {
   "use strict";
 
+  // Keyed by the composer block kind (== graph node type). New vocabulary only.
   // type id -> { file } (colored svg, as-is) | { color, paths } (recolorable Lucide line)
   const ICONS = {
-    "patron/agent/trigger":   { file: "icons/clock-alarm-20.svg" },
-    "patron/agent/rag":       { file: "icons/search.svg" },
-    "patron/agent/brain":     { file: "icons/brain.svg" },
-    "patron/agent/tools":     { file: "icons/tools.svg" },
-    "patron/agent/guardrail": { file: "icons/check-badge.svg" },
-    "patron/agent/deliver":   { file: "icons/send-email-flat.svg", scale: 0.82 }, // fills its viewBox → render a bit smaller
-    "patron/dest/whatsapp":   { file: "icons/whatsapp-icon.svg" },
-    "patron/dest/tts":        { file: "icons/voice-activation-1.svg" },
-    "patron/dest/bus":        { file: "icons/bus.svg" },
+    "trigger":   { file: "icons/clock-alarm-20.svg" },
+    "agent":     { file: "icons/assistant.svg" },
+    "transform": { file: "icons/arrow-transfer-horizontal-square.svg" },
+    "branch":    { file: "icons/nodes-right.svg" },
+    "loop":      { file: "icons/arrow-transfer-horizontal-square.svg" },
+    "composite": { file: "icons/table.svg" },
+    "whatsapp":  { file: "icons/whatsapp-icon.svg" },
+    "tts":       { file: "icons/voice-activation-1.svg" },
+    "bus":       { file: "icons/bus.svg" },
   };
 
   function lucideSvg(paths, size, col) {
