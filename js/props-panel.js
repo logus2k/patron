@@ -54,6 +54,17 @@
       .catch(() => { /* mcp-service/runtime unreachable — the field falls back to CSV text */ });
   }
 
+  // Grounded picker source: real agent_server presets (the persona). Populates the persona dropdown.
+  let PRESETS = null;
+  function loadPresets() {
+    fetch("admin/channels/presets", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.presets)) { PRESETS = d.presets; if (open) populate(lastNode); }
+      })
+      .catch(() => { /* agent_server/runtime unreachable — the field falls back to text entry */ });
+  }
+
   function ready(cb) {
     const app = window.PatronApp;
     if (app && app.canvas) return cb(app);
@@ -420,6 +431,24 @@
       box.addEventListener("click", openPanel); // clicking the box opens the picker too
       input.appendChild(box);
       input.appendChild(dots);
+    } else if (control === "preset") {
+      // grounded dropdown of real agent_server presets. Preserves the current value even if
+      // it's not (yet) in the list; falls back to a plain text input if presets are unloaded.
+      if (!PRESETS) {
+        input = document.createElement("input");
+        input.type = "text";
+        input.value = cur == null ? "" : String(cur);
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.addEventListener("change", () => commitValue(node, f.key, input.value));
+      } else {
+        input = document.createElement("select");
+        input.appendChild(new Option("— select —", ""));
+        const names = PRESETS.map((p) => p.name);
+        for (const n of names) input.appendChild(new Option(n, n));
+        if (cur && !names.includes(cur)) input.appendChild(new Option(cur + "  (not on server)", cur));
+        input.value = cur == null ? "" : String(cur);
+        input.addEventListener("change", () => commitValue(node, f.key, input.value));
+      }
     } else if (control === "boolean") {
       input = document.createElement("input");
       input.type = "checkbox";
@@ -546,6 +575,7 @@
     loadCatalog();    // fetch the block field metadata (controls) up front
     loadWaTargets();  // fetch real WhatsApp Groups/Contacts for the grounded target picker
     loadMcpTools();   // fetch the real MCP tool catalog for the Agent allow-list picker
+    loadPresets();    // fetch the real agent_server presets for the persona dropdown
     if (app.menuBar) {
       app.menuBar.registerCommand("view.properties", toggle);
       app.menuBar.setContext("propsVisible", false);

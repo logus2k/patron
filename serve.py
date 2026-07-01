@@ -37,6 +37,8 @@ COMPOSER_COMPILE = "/composer/compile"
 WA_TARGETS = "/admin/channels/whatsapp/targets"
 # Grounded pickers: the editor reads the real MCP tool catalog from the runtime admin API.
 MCP_TOOLS = "/admin/channels/mcp/tools"
+# Grounded pickers: the editor reads the real agent_server presets from the runtime admin API.
+PRESETS = "/admin/channels/presets"
 # agent_runtime admin API (localhost-published by its compose: 127.0.0.1:6817).
 RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstrip("/")
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
@@ -80,6 +82,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._proxy_get(f"{RUNTIME_URL}{WA_TARGETS}")
         if self.path.split("?")[0] == MCP_TOOLS:
             return self._proxy_get(f"{RUNTIME_URL}{MCP_TOOLS}")
+        if self.path.split("?")[0] == PRESETS:
+            return self._proxy_get(f"{RUNTIME_URL}{PRESETS}")
         return super().do_GET()
 
     def _proxy_get(self, url):

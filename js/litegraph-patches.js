@@ -22,8 +22,29 @@
  */
 (function (global) {
   "use strict";
-  var LiteGraph = global.LiteGraph, LGraphCanvas = global.LGraphCanvas;
+  var LiteGraph = global.LiteGraph, LGraphCanvas = global.LGraphCanvas, LGraphNode = global.LGraphNode;
   if (!LiteGraph || !LGraphCanvas) { console.error("litegraph-patches: litegraph not loaded first"); return; }
+
+  // ---- LGraphNode.prototype.getConnectionPos ----
+  // PATRON: inset the IN/OUT connector dots ~20px inward from the node's left/right borders so
+  // they aren't flush with the edge. Links use getConnectionPos, so the wires follow the dots
+  // automatically. Only the default vertical-slot path is inset (collapsed / horizontal /
+  // hard-coded slot.pos layouts are left as-is).
+  if (LGraphNode && LGraphNode.prototype.getConnectionPos) {
+    var _patronGetConnPos = LGraphNode.prototype.getConnectionPos;
+    var PATRON_SLOT_INSET = 10;
+    LGraphNode.prototype.getConnectionPos = function (is_input, slot_number, out) {
+      out = _patronGetConnPos.call(this, is_input, slot_number, out);
+      var slot = is_input
+        ? (this.inputs && this.inputs[slot_number])
+        : (this.outputs && this.outputs[slot_number]);
+      var hardcoded = slot && slot.pos; // respect an explicit per-slot position
+      if (!this.flags.collapsed && !this.horizontal && !hardcoded && slot_number >= 0) {
+        out[0] += is_input ? PATRON_SLOT_INSET : -PATRON_SLOT_INSET;
+      }
+      return out;
+    };
+  }
 
   // The extracted drawNode/drawNodeShape below use litegraph's module-local scratch
   // arrays, which are NOT in scope here (the vendored file is a closed IIFE). Provide our
