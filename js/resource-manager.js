@@ -78,13 +78,27 @@
     renderTable(table, foot);
   }
 
+  // Run a verb on one item: 'delete' → DELETE /resources/<id>/<key>; else POST …/<verb>.
+  function runVerb(id, key, verb) {
+    const base = "resources/" + encodeURIComponent(id) + "/" + encodeURIComponent(key);
+    const url = verb === "delete" ? base : base + "/" + encodeURIComponent(verb);
+    return fetch(url, { method: verb === "delete" ? "DELETE" : "POST" })
+      .then((r) => r.json().catch(() => ({ ok: false, error: "bad response" })))
+      .catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+  }
+
   function renderTable(table, foot) {
     const d = descFor(curType);
     const cols = (d && d.columns && d.columns.length) ? d.columns : [d ? d.identity : "id"];
+    const caps = (d && d.capabilities) || [];
+    const verbs = [].concat((d && d.actions) || []); // declared actions…
+    if (caps.indexOf("delete") >= 0) verbs.push("delete"); // …plus delete when allowed
+    const idKey = d ? d.identity : "id";
     table.innerHTML = "";
 
     const head = document.createElement("div"); head.className = "rm-row rm-head";
     for (const c of cols) { const cell = document.createElement("div"); cell.className = "rm-cell"; cell.textContent = c; head.appendChild(cell); }
+    if (verbs.length) { const ah = document.createElement("div"); ah.className = "rm-cell rm-actions"; ah.textContent = "actions"; head.appendChild(ah); }
     table.appendChild(head);
 
     const ql = q.trim().toLowerCase();
@@ -98,6 +112,25 @@
         const v = it[c];
         cell.textContent = (v === true) ? "✓" : (v === false) ? "—" : String(v == null ? "" : v);
         row.appendChild(cell);
+      }
+      if (verbs.length) {
+        const key = String(it[idKey]);
+        const act = document.createElement("div"); act.className = "rm-cell rm-actions";
+        for (const v of verbs) {
+          const btn = document.createElement("button");
+          btn.type = "button"; btn.className = "rm-act" + (v === "delete" ? " rm-danger" : "");
+          btn.textContent = v;
+          btn.addEventListener("click", async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (v === "delete" && !window.confirm("Delete " + curType + " '" + key + "'?")) return;
+            btn.disabled = true;
+            const res = await runVerb(curType, key, v);
+            if (res && res.ok) { loadItems(curType); }
+            else { foot.className = "rm-foot rm-err"; foot.textContent = v + " failed: " + ((res && res.error) || "error"); btn.disabled = false; }
+          });
+          act.appendChild(btn);
+        }
+        row.appendChild(act);
       }
       table.appendChild(row); shown++;
     }

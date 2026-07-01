@@ -312,6 +312,16 @@ html, body {
 .rm-cell:first-child { flex: 1.4 1 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .rm-foot { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--panel-border); font-size: 12px; opacity: .7; }
 .rm-foot.rm-err { color: #e5534b; opacity: 1; }
+.rm-actions { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; }
+.rm-head .rm-actions { display: block; }
+.rm-act {
+  padding: 2px 8px; cursor: pointer; font-size: 11.5px;
+  border: 1px solid var(--panel-border); border-radius: 5px;
+  background: var(--bg); color: inherit;
+}
+.rm-act:hover { border-color: var(--accent); }
+.rm-act.rm-danger:hover { border-color: #e5534b; color: #e5534b; }
+.rm-act:disabled { opacity: .5; cursor: default; }
 
 /* ---- inspector panel ---- */
 #inspect-out {

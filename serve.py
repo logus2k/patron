@@ -125,7 +125,27 @@ class Handler(SimpleHTTPRequestHandler):
             return self._proxy_post(f"{RUNTIME_URL}{COMPOSER_COMPILE}")
         if self.path.split("?")[0] == TEMPLATE_WRITER:
             return self._proxy_post(f"{RUNTIME_URL}{TEMPLATE_WRITER}")
+        # Resource model action verbs: POST /resources/{id}/{key}/{verb}.
+        if self.path.split("?")[0].startswith("/resources/"):
+            return self._proxy_post(f"{RUNTIME_URL}{self.path}")
         self.send_error(405, "Method Not Allowed")
+
+    def do_DELETE(self):
+        # Resource model delete: DELETE /resources/{id}/{key}.
+        if self.path.split("?")[0].startswith("/resources/"):
+            return self._proxy_delete(f"{RUNTIME_URL}{self.path}")
+        self.send_error(405, "Method Not Allowed")
+
+    def _proxy_delete(self, url):
+        """Relay a DELETE to a localhost-bound backend and return its response."""
+        try:
+            status, resp = _http("DELETE", url)
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"upstream {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def _proxy_post(self, url):
         """Relay a POST body to a localhost-bound backend and return its response."""
