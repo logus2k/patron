@@ -322,6 +322,7 @@ html, body {
 .rm-act:hover { border-color: var(--accent); }
 .rm-act.rm-danger:hover { border-color: #e5534b; color: #e5534b; }
 .rm-act:disabled { opacity: .5; cursor: default; }
+.rm-form { flex: 1 1 auto; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
 
 /* ---- inspector panel ---- */
 #inspect-out {

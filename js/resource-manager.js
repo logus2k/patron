@@ -87,6 +87,48 @@
       .catch((e) => ({ ok: false, error: String(e && e.message || e) }));
   }
 
+  // Inline schema-driven edit form (replaces the list; "← Back" returns). Renders the
+  // descriptor's schema fields that are present on the item (identity excluded), submits a
+  // PUT /resources/<id>/<key>. Used for editable resources (e.g. a trigger's cron/timezone).
+  function editItem(d, item) {
+    if (!body) return;
+    body.innerHTML = "";
+    const bar = document.createElement("div"); bar.className = "rm-bar";
+    const back = document.createElement("button"); back.type = "button"; back.className = "pp-btn"; back.textContent = "← Back";
+    back.addEventListener("click", () => render());
+    const title = document.createElement("span"); title.className = "rm-count"; title.textContent = "Edit " + d.label + " · " + item[d.identity];
+    bar.appendChild(back); bar.appendChild(title);
+    body.appendChild(bar);
+
+    const form = document.createElement("div"); form.className = "rm-form";
+    const inputs = {};
+    for (const f of (d.schema || [])) {
+      if (f.key === d.identity) continue;
+      if (item[f.key] === undefined) continue; // only fields present on the item (editable ones)
+      const wrap = document.createElement("label"); wrap.className = "pp-field";
+      const cap = document.createElement("span"); cap.className = "pp-label"; cap.textContent = f.label || f.key; wrap.appendChild(cap);
+      const inp = document.createElement("input"); inp.type = "text"; inp.className = "pp-input";
+      inp.value = item[f.key] == null ? "" : String(item[f.key]);
+      wrap.appendChild(inp); form.appendChild(wrap); inputs[f.key] = inp;
+    }
+    body.appendChild(form);
+
+    const foot = document.createElement("div"); foot.className = "rm-foot";
+    const save = document.createElement("button"); save.type = "button"; save.className = "pp-btn"; save.textContent = "Save";
+    const status = document.createElement("span"); status.style.marginLeft = "10px";
+    save.addEventListener("click", async () => {
+      save.disabled = true; foot.className = "rm-foot"; status.textContent = "saving…";
+      const payload = {}; for (const k in inputs) payload[k] = inputs[k].value;
+      const res = await fetch("resources/" + encodeURIComponent(d.id) + "/" + encodeURIComponent(item[d.identity]), {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+      if (res && res.ok) { render(); loadItems(curType); }
+      else { foot.className = "rm-foot rm-err"; status.textContent = "save failed: " + ((res && res.error) || "error"); save.disabled = false; }
+    });
+    foot.appendChild(save); foot.appendChild(status);
+    body.appendChild(foot);
+  }
+
   function renderTable(table, foot) {
     const d = descFor(curType);
     const cols = (d && d.columns && d.columns.length) ? d.columns : [d ? d.identity : "id"];
@@ -96,9 +138,10 @@
     const idKey = d ? d.identity : "id";
     table.innerHTML = "";
 
+    const hasActions = verbs.length || (d && d.editable);
     const head = document.createElement("div"); head.className = "rm-row rm-head";
     for (const c of cols) { const cell = document.createElement("div"); cell.className = "rm-cell"; cell.textContent = c; head.appendChild(cell); }
-    if (verbs.length) { const ah = document.createElement("div"); ah.className = "rm-cell rm-actions"; ah.textContent = "actions"; head.appendChild(ah); }
+    if (hasActions) { const ah = document.createElement("div"); ah.className = "rm-cell rm-actions"; ah.textContent = "actions"; head.appendChild(ah); }
     table.appendChild(head);
 
     const ql = q.trim().toLowerCase();
@@ -113,9 +156,15 @@
         cell.textContent = (v === true) ? "✓" : (v === false) ? "—" : String(v == null ? "" : v);
         row.appendChild(cell);
       }
-      if (verbs.length) {
+      if (hasActions) {
         const key = String(it[idKey]);
         const act = document.createElement("div"); act.className = "rm-cell rm-actions";
+        if (d && d.editable) {
+          const eb = document.createElement("button");
+          eb.type = "button"; eb.className = "rm-act"; eb.textContent = "edit";
+          eb.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); editItem(d, it); });
+          act.appendChild(eb);
+        }
         for (const v of verbs) {
           const btn = document.createElement("button");
           btn.type = "button"; btn.className = "rm-act" + (v === "delete" ? " rm-danger" : "");

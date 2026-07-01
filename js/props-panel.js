@@ -31,16 +31,6 @@
       .catch(() => { /* offline — keep the widget fallback */ });
   }
 
-  // Grounded picker source: real WhatsApp Groups/Contacts (proxied to the runtime admin API).
-  let WA_TARGETS = null;
-  function loadWaTargets() {
-    fetch("admin/channels/whatsapp/targets", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && Array.isArray(d.targets)) { WA_TARGETS = d.targets; if (open) populate(lastNode); }
-      })
-      .catch(() => { /* bridge/runtime unreachable — the field falls back to text entry */ });
-  }
 
   // --- Resource model: ONE generic grounded source for any declared resource. The editor reads
   // /resources/catalog (descriptors) + /resources/<id> (items), so a field with control
@@ -557,57 +547,30 @@
     const control = f.control || "text";
     let input, err, extra;
 
-    if (control === "whatsapp-target") {
-      // grounded picker: dropdown of real Groups/Contacts + a "Type an id…" text fallback,
-      // mirroring the agent_runtime admin UI. Falls back to plain text if targets unloaded.
-      const targets = WA_TARGETS || [];
-      input = document.createElement("select");
-      input.appendChild(new Option("— select —", ""));
-      input.appendChild(new Option("Type an id…", "__type__"));
-      const grp = (label, items) => {
-        if (!items.length) return;
-        const og = document.createElement("optgroup");
-        og.label = label;
-        for (const t of items) og.appendChild(new Option(`${t.name} — ${t.id}`, t.id));
-        input.appendChild(og);
-      };
-      grp("Groups", targets.filter((t) => t.kind === "group"));
-      grp("Contacts", targets.filter((t) => t.kind === "contact"));
-      const idBox = document.createElement("input");
-      idBox.type = "text";
-      idBox.className = "pp-input";
-      idBox.style.marginTop = "6px";
-      idBox.placeholder = "chat id (…@g.us / …@c.us)";
-      const known = targets.some((t) => t.id === cur);
-      if (cur && known) { input.value = cur; idBox.style.display = "none"; }
-      else if (cur) { input.value = "__type__"; idBox.value = cur; }
-      else { input.value = ""; idBox.style.display = "none"; }
-      // Pick an id AND auto-fill the friendly name (target_name) from the same catalog, so the
-      // block carries "L2K Chat" beside the raw id. An unknown/typed id leaves any existing
-      // name untouched (never clobbers a hand-entered label with blank).
-      const nameFor = (id) => { const t = targets.find((x) => x.id === id); return t ? t.name : ""; };
-      const setTarget = (id) => {
-        commitValue(node, f.key, id);
-        const nm = nameFor(id);
-        if (nm) { commitValue(node, "target_name", nm); populate(node); } // re-render the name field
-      };
-      input.addEventListener("change", () => {
-        if (input.value === "__type__") { idBox.style.display = ""; if (idBox.focus) idBox.focus(); }
-        else { idBox.style.display = "none"; setTarget(input.value); }
-      });
-      idBox.addEventListener("change", () => setTarget(idBox.value));
-      extra = idBox;
-    } else if (control === "resource-ref") {
-      // GENERIC grounded picker for any declared resource (kind = resource id). Reads the
-      // descriptor (identity/label/columns/multi) + items from /resources/<id>. Single →
-      // dropdown; multi → a read-only summary box + "…" opening the shared multi-select picker
-      // panel. Plain-text fallback if catalog/items aren't loaded (never blocks authoring).
+    if (control === "resource-ref") {
+      // GENERIC grounded picker for ANY declared resource (kind = resource id). Descriptor
+      // drives everything: multi → summary + "…" checklist panel; single → dropdown, optionally
+      // optgrouped (group_by), with a "type an id" escape (allow_free) and pick side-effects
+      // (sets → fill sibling fields, e.g. target_name). Plain-text fallback if not loaded.
       const rid = f.kind;
       const desc = RESOURCES && RESOURCES[rid];
       if (desc) loadResourceItems(rid);
       const items = RESOURCE_ITEMS[rid] || [];
       const idKey = desc && desc.identity ? desc.identity : "id";
       const labelKey = desc && desc.columns && desc.columns[0] ? desc.columns[0] : idKey;
+      const sets = (desc && desc.sets) || null;
+      const itemById = (id) => items.find((it) => String(it[idKey]) === String(id));
+      const applyPick = (value) => {
+        commitValue(node, f.key, value);
+        if (sets && Object.keys(sets).length) {
+          const it = itemById(value);
+          for (const sib in sets) {
+            const v = it ? it[sets[sib]] : null;
+            if (v != null && String(v) !== "") commitValue(node, sib, String(v));
+          }
+          populate(node); // re-render sibling fields (e.g. target_name)
+        }
+      };
       if (desc && desc.multi) {
         // multi-select → summary box + "…" opens the shared searchable checklist panel
         input = document.createElement("div");
@@ -636,15 +599,43 @@
       } else {
         input = document.createElement("select");
         input.appendChild(new Option("— select —", ""));
+        const allowFree = !!(desc && desc.allow_free);
+        if (allowFree) input.appendChild(new Option("Type an id…", "__type__"));
         const vals = items.map((it) => String(it[idKey]));
-        for (const it of items) {
+        const optFor = (it) => {
           const v = String(it[idKey]);
           const lab = it[labelKey] != null ? String(it[labelKey]) : v;
-          input.appendChild(new Option(lab === v ? v : lab + "  (" + v + ")", v));
+          return new Option(lab === v ? v : lab + " — " + v, v);
+        };
+        const groupBy = desc && desc.group_by;
+        if (groupBy) {
+          const groups = {};
+          for (const it of items) { const g = String(it[groupBy] || "other"); (groups[g] = groups[g] || []).push(it); }
+          for (const g of Object.keys(groups)) {
+            const og = document.createElement("optgroup");
+            og.label = g.charAt(0).toUpperCase() + g.slice(1) + "s";
+            for (const it of groups[g]) og.appendChild(optFor(it));
+            input.appendChild(og);
+          }
+        } else {
+          for (const it of items) input.appendChild(optFor(it));
         }
-        if (cur && !vals.includes(String(cur))) input.appendChild(new Option(cur + "  (not on server)", cur));
-        input.value = cur == null ? "" : String(cur);
-        input.addEventListener("change", () => commitValue(node, f.key, input.value));
+        const known = vals.includes(String(cur));
+        let idBox = null;
+        if (allowFree) {
+          idBox = document.createElement("input");
+          idBox.type = "text"; idBox.className = "pp-input"; idBox.style.marginTop = "6px";
+          idBox.placeholder = f.placeholder || "type an id";
+        }
+        if (cur && known) { input.value = cur; if (idBox) idBox.style.display = "none"; }
+        else if (cur && allowFree) { input.value = "__type__"; idBox.value = cur; }
+        else if (cur) { input.appendChild(new Option(cur + "  (not on server)", cur)); input.value = cur; if (idBox) idBox.style.display = "none"; }
+        else { input.value = ""; if (idBox) idBox.style.display = "none"; }
+        input.addEventListener("change", () => {
+          if (input.value === "__type__") { if (idBox) { idBox.style.display = ""; if (idBox.focus) idBox.focus(); } }
+          else { if (idBox) idBox.style.display = "none"; applyPick(input.value); }
+        });
+        if (idBox) { idBox.addEventListener("change", () => applyPick(idBox.value)); extra = idBox; }
       }
     } else if (control === "template") {
       // The important task-prompt field: an inline textarea for quick edits + a button that
@@ -724,14 +715,34 @@
     return wrap;
   }
 
-  // Before rendering, fill an empty target_name from a KNOWN whatsapp-target id (existing
-  // graphs whose id predates this field), so the name field — now shown first — is populated
-  // on the very first paint regardless of field order.
-  function preresolveTargetName(node, fields) {
-    const hasWa = fields.some((f) => f.control === "whatsapp-target");
-    if (!hasWa || !WA_TARGETS || node.properties.target_name) return;
-    const t = WA_TARGETS.find((x) => x.id === node.properties.target);
-    if (t && t.name) commitValue(node, "target_name", t.name);
+  // Set a property + its canvas widget WITHOUT persisting — for view-time resolution that must
+  // NOT dirty/save the workspace (merely opening the panel shouldn't rewrite the graph).
+  function silentSet(node, key, val) {
+    node.properties[key] = val;
+    const w = (node.widgets || []).find((x) => x.name === key);
+    if (w) w.value = val;
+  }
+
+  // Before rendering, resolve any resource-ref field's `sets` side-effects from a KNOWN current
+  // value (e.g. fill target_name from a known WhatsApp id) — SILENTLY, so viewing a node never
+  // triggers an autosave. Only fills siblings that are empty; the user's pick still persists.
+  function preresolveRefs(node, fields) {
+    if (!RESOURCES) return;
+    for (const f of fields) {
+      if ((f.control || "") !== "resource-ref") continue;
+      const desc = RESOURCES[f.kind];
+      if (!desc || !desc.sets || !Object.keys(desc.sets).length) continue;
+      const cur = node.properties[f.key];
+      if (!cur) continue;
+      const items = RESOURCE_ITEMS[f.kind];
+      if (!items || !items.length) { loadResourceItems(f.kind); continue; }
+      const idKey = desc.identity || "id";
+      const it = items.find((x) => String(x[idKey]) === String(cur));
+      if (!it) continue;
+      for (const sib in desc.sets) {
+        if (!node.properties[sib] && it[desc.sets[sib]] != null) silentSet(node, sib, String(it[desc.sets[sib]]));
+      }
+    }
   }
 
   function populate(node) {
@@ -753,7 +764,7 @@
     // widgets if the catalog isn't loaded / has no entry for this type.
     const fields = CATALOG && CATALOG[node.type];
     if (fields && fields.length) {
-      preresolveTargetName(node, fields); // fill target_name from a known id BEFORE rendering
+      preresolveRefs(node, fields); // fill sibling fields (e.g. target_name) SILENTLY before render
       for (const f of fields) body.appendChild(fieldForSchema(node, f));
     } else if (node.widgets && node.widgets.length) {
       for (const w of node.widgets) body.appendChild(fieldFor(node, w));
@@ -790,7 +801,6 @@
   ready((app) => {
     const canvas = app.canvas;
     loadCatalog();    // fetch the block field metadata (controls) up front
-    loadWaTargets();  // fetch real WhatsApp Groups/Contacts for the grounded target picker
     loadResources();  // fetch the resource catalog (descriptors) for generic resource-ref pickers
     if (app.menuBar) {
       app.menuBar.registerCommand("view.properties", toggle);

@@ -116,7 +116,27 @@ class Handler(SimpleHTTPRequestHandler):
                 json.dump(data, f, indent=2)
             os.replace(tmp, WORKSPACE)  # atomic
             return self._json(200, {"ok": True})
+        # Resource model update: PUT /resources/{id}/{key}.
+        if self.path.split("?")[0].startswith("/resources/"):
+            return self._proxy_put(f"{RUNTIME_URL}{self.path}")
         self.send_error(405, "Method Not Allowed")
+
+    def _proxy_put(self, url):
+        """Relay a PUT body to a localhost-bound backend and return its response."""
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        try:
+            status, resp = _http("PUT", url, body)
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"upstream {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def do_POST(self):
         if self.path.split("?")[0] == DEPLOY_API:
