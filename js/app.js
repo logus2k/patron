@@ -417,9 +417,24 @@
       },
     };
   }
+  // A saved graph is only loadable if EVERY node type is still registered. An old-vocabulary
+  // workspace (from a previous node set) would otherwise render as red "undefined" placeholders
+  // AND get re-saved on the next autosave — so we discard it and load the default instead.
+  function graphCompatible(g) {
+    const nodes = (g && g.nodes) || [];
+    const reg = (typeof LiteGraph !== "undefined" && LiteGraph.registered_node_types) || {};
+    return nodes.every((n) => !!reg[n.type]);
+  }
+
   function applyWorkspace(ws) {
-    graph.clear();
-    graph.configure(ws.graph || {});
+    const g = ws && ws.graph;
+    if (g && g.nodes && g.nodes.length && !graphCompatible(g)) {
+      console.warn("Patron: saved workspace has unknown node types — discarding it and loading the default News Agent.");
+      loadNewsAgent(); // self-heal (async); the next autosave overwrites the stale workspace
+    } else {
+      graph.clear();
+      graph.configure(g || {});
+    }
     const ui = ws.ui || {};
     if (ui.theme) applyTheme(ui.theme);
     if (ui.view) {
@@ -536,9 +551,9 @@
     LiteGraph.NODE_BOX_OUTLINE_COLOR = cssVar("--link-highlight", "#ffb02e");
     // 1px node border matching the panels' border (litegraph doesn't stroke one by default).
     LiteGraph.NODE_BORDER_COLOR = cssVar("--panel-border", "#d8dee6");
-    // Selected-node title text — dark, so it reads on the soft pastel green / slate title bar
-    // (litegraph defaults it to white). The bar color is theme-independent, so use one value.
-    LiteGraph.NODE_SELECTED_TITLE_COLOR = "#233040";
+    // Selected-node title text — theme-aware for contrast against the selection bar
+    // (light theme: strong orange bar → white text; dark theme: amber bar → dark text).
+    LiteGraph.NODE_SELECTED_TITLE_COLOR = cssVar("--node-selected-title", "#233040");
     // highlight color for edges of a selected node (litegraph hardcodes #FFF →
     // invisible on light paper; vendor patched to honor this global).
     LiteGraph.LINK_HIGHLIGHT_COLOR = cssVar("--link-highlight", "#ffffff");

@@ -14,6 +14,22 @@
 (function () {
   "use strict";
   let panel = null, body = null, open = false, lastNode = null;
+  // Block input-rendering metadata, fetched from agent_runtime's /composer/catalog (the
+  // block classes declare each field's `control`). Keyed by block type == node.type.
+  // Until it loads (or if unreachable) we fall back to the node's own widgets.
+  let CATALOG = null;
+
+  function loadCatalog() {
+    fetch("composer/catalog", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cat) => {
+        if (!cat || !cat.blocks) return;
+        CATALOG = {};
+        for (const b of cat.blocks) CATALOG[b.type] = b.config || [];
+        if (open) populate(lastNode); // re-render with proper controls now
+      })
+      .catch(() => { /* offline — keep the widget fallback */ });
+  }
 
   function ready(cb) {
     const app = window.PatronApp;
@@ -119,28 +135,114 @@
     return wrap;
   }
 
+  // Write a value from the panel back to the node property + its canvas widget display.
+  function commitValue(node, key, val) {
+    node.properties[key] = val;
+    const w = (node.widgets || []).find((x) => x.name === key);
+    if (w) w.value = val;
+    if (typeof window.PatronFitNodeWidth === "function") window.PatronFitNodeWidth(node);
+    if (window.PatronApp.canvas.setDirty) window.PatronApp.canvas.setDirty(true, true);
+    if (window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
+  }
+
+  // Render ONE field from the block's catalog metadata (f = {key, control, label, values,
+  // placeholder, min, max}). The control decides the input: text / number / select /
+  // textarea (multi-line prompt) / json (monospace + validation).
+  function fieldForSchema(node, f) {
+    const wrap = document.createElement("label");
+    wrap.className = "pp-field";
+    const cap = document.createElement("span");
+    cap.className = "pp-label";
+    cap.textContent = f.label || f.key;
+    wrap.appendChild(cap);
+
+    const cur = node.properties[f.key];
+    const control = f.control || "text";
+    let input, err;
+
+    if (control === "boolean") {
+      input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = !!cur;
+      input.addEventListener("change", () => commitValue(node, f.key, input.checked));
+    } else if (control === "select") {
+      input = document.createElement("select");
+      for (const v of f.values || []) {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = v;
+        input.appendChild(o);
+      }
+      input.value = cur;
+      input.addEventListener("change", () => commitValue(node, f.key, input.value));
+    } else if (control === "number") {
+      input = document.createElement("input");
+      input.type = "number";
+      if (f.min != null) input.min = f.min;
+      if (f.max != null) input.max = f.max;
+      input.step = "any";
+      input.value = cur == null ? "" : cur;
+      input.addEventListener("change", () => commitValue(node, f.key, Number(input.value)));
+    } else if (control === "textarea" || control === "json") {
+      input = document.createElement("textarea");
+      input.rows = control === "json" ? 4 : 3;
+      input.value = cur == null ? "" : String(cur);
+      if (f.placeholder) input.placeholder = f.placeholder;
+      err = document.createElement("div");
+      err.className = "pp-err";
+      input.addEventListener("change", () => {
+        if (control === "json" && input.value.trim()) {
+          try { JSON.parse(input.value); } catch (e) { err.textContent = "invalid JSON: " + e.message; return; }
+        }
+        err.textContent = "";
+        commitValue(node, f.key, input.value);
+      });
+    } else { // text
+      input = document.createElement("input");
+      input.type = "text";
+      input.value = cur == null ? "" : String(cur);
+      if (f.placeholder) input.placeholder = f.placeholder;
+      input.addEventListener("change", () => commitValue(node, f.key, input.value));
+    }
+    if (input.type === "checkbox") {
+      input.className = "pp-check";
+      wrap.classList.add("pp-field-row"); // label + checkbox on one row
+    } else {
+      input.className = "pp-input" +
+        (input.tagName === "TEXTAREA" ? " pp-area" : "") +
+        (control === "json" ? " pp-mono" : "");
+    }
+    wrap.appendChild(input);
+    if (err) wrap.appendChild(err);
+    return wrap;
+  }
+
   function populate(node) {
     lastNode = node || lastNode;
     ensurePanel();
     body.innerHTML = "";
     const h = document.createElement("div");
+    h.className = "pp-title";
     h.textContent = node ? (node.title || node.type) : "Properties";
-    h.style.cssText = "font-weight:600;margin-bottom:10px";
     body.appendChild(h);
     if (!node) {
       const m = document.createElement("div");
+      m.className = "pp-empty";
       m.textContent = "Select a node to edit its fields.";
-      m.style.opacity = ".6";
       body.appendChild(m);
       return;
     }
-    if (!node.widgets || !node.widgets.length) {
-      const m = document.createElement("div");
-      m.textContent = "no editable fields";
-      m.style.opacity = ".6";
-      body.appendChild(m);
-    } else {
+    // Prefer the block's own catalog metadata (control per field); fall back to the node's
+    // widgets if the catalog isn't loaded / has no entry for this type.
+    const fields = CATALOG && CATALOG[node.type];
+    if (fields && fields.length) {
+      for (const f of fields) body.appendChild(fieldForSchema(node, f));
+    } else if (node.widgets && node.widgets.length) {
       for (const w of node.widgets) body.appendChild(fieldFor(node, w));
+    } else {
+      const m = document.createElement("div");
+      m.className = "pp-empty";
+      m.textContent = "no editable fields";
+      body.appendChild(m);
     }
   }
 
@@ -166,6 +268,7 @@
 
   ready((app) => {
     const canvas = app.canvas;
+    loadCatalog(); // fetch the block field metadata (controls) up front
     if (app.menuBar) {
       app.menuBar.registerCommand("view.properties", toggle);
       app.menuBar.setContext("propsVisible", false);

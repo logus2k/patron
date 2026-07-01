@@ -101,12 +101,41 @@
     };
   }
 
-  // Every field renders as a read-only "label  value" row on the canvas (litegraph's TEXT
-  // widget style — no arrows, no dropdown chevron, no toggle), because values are edited
-  // ONLY in the Properties panel. Each widget carries `editKind` (+ values/min/max) so the
-  // panel builds the right control (select / number / text); the canvas widget just shows.
+  // Custom read-only field renderer: a "label ........ value" row with SUBTLE corners (not
+  // litegraph's full-pill radius). Used for every field, since values are edited only in the
+  // Properties panel. litegraph calls w.draw for unknown widget types (the switch default).
+  function drawField(ctx, node, widget_width, y, H) {
+    const w = this, margin = 15, r = 4;
+    ctx.save();
+    ctx.font = "normal " + ((typeof LiteGraph !== "undefined" && LiteGraph.NODE_SUBTEXT_SIZE) || 12) + "px Arial";
+    ctx.fillStyle = LiteGraph.WIDGET_BGCOLOR;
+    ctx.strokeStyle = LiteGraph.WIDGET_OUTLINE_COLOR;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(margin, y, widget_width - margin * 2, H, [r]);
+    else ctx.rect(margin, y, widget_width - margin * 2, H);
+    ctx.fill();
+    ctx.stroke();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(margin, y, widget_width - margin * 2, H); ctx.clip();
+    ctx.fillStyle = LiteGraph.WIDGET_SECONDARY_TEXT_COLOR;
+    ctx.textAlign = "left";
+    ctx.fillText(w.label || w.name, margin * 2, y + H * 0.7);
+    ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+    ctx.textAlign = "right";
+    ctx.fillText(String(w.value == null ? "" : w.value).substr(0, 32), widget_width - margin * 2, y + H * 0.7);
+    ctx.restore();
+    ctx.restore();
+  }
+  global.PatronDrawField = drawField;
+
+  // Every field renders as a read-only "label  value" row on the canvas (custom drawField —
+  // subtle corners, no arrows/dropdown/toggle), because values are edited ONLY in the
+  // Properties panel. Each widget carries `editKind` (+ values/min/max) so the panel builds
+  // the right control; the canvas widget just shows the value.
   function displayW(node, name, kind, extra) {
     const w = node.addWidget("text", name, node.properties[name], (v) => (node.properties[name] = v));
+    w.type = "patron/field";   // unknown type -> litegraph calls w.draw (our drawField)
+    w.draw = drawField;
     w.editKind = kind;
     if (extra && extra.values) w.editValues = extra.values;
     if (extra && extra.min != null) w.editMin = extra.min;
@@ -158,6 +187,12 @@
       this.addProperty("tools_allow", "mcp__newsapi_search, mcp__fetch_url");
       this.addProperty("tools_max_rounds", 3);
       this.addProperty("memory", "none");
+      // Agent-level metadata + optional capabilities: stored as properties (so they
+      // serialize + lower), edited in the Properties panel (which renders every field
+      // from the block catalog). Only the key fields get a canvas widget below.
+      this.addProperty("memory_max_turns", 20);
+      this.addProperty("description", "");
+      this.addProperty("enabled", true);
       textW(this, "persona");
       numW(this, "temperature", 0, 2, 2);
       numW(this, "max_tokens", 1, null, 0);
@@ -230,6 +265,8 @@
         const w = this.addWidget("text", "target", this.properties.target, (v) => (this.properties.target = v));
         w.label = targetLabel || "target";
         w.editKind = "text";
+        w.type = "patron/field";
+        w.draw = global.PatronDrawField;
         this.color = DEST;
         this.size = [200, 60];
         iconize(this);
