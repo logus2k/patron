@@ -350,6 +350,144 @@
     if (mcpPanel && typeof mcpPanel.front === "function") mcpPanel.front();
   }
 
+  // --- Template Studio: a SEPARATE, non-modal editor panel for the input_template — a large
+  // editor + clickable {vars} chips (derived from the node's input_vars). Writes back live.
+  // (The LLM co-author loop is a planned follow-up.) ---
+  let tplPanel = null, tplBody = null, tplCtx = null;
+
+  function insertAtCursor(ta, text) {
+    const s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    const e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+    ta.selectionStart = ta.selectionEnd = s + text.length;
+  }
+
+  function ensureTemplateStudio() {
+    if (tplPanel) return;
+    if (typeof jsPanel !== "undefined") {
+      tplPanel = jsPanel.create({
+        headerTitle: '<img src="icons/chat-bubble-text-square.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Template Studio</span>',
+        theme: "none",
+        borderRadius: "8px",
+        border: "1px solid var(--panel-border)",
+        panelSize: { width: 640, height: 460 },
+        position: { my: "center", at: "center", offsetX: 0, offsetY: 20 },
+        boxShadow: 3,
+        headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+        addCloseControl: 1,
+        callback: (p) => {
+          p.content.style.cssText =
+            "display:flex;flex-direction:column;padding:0;overflow:hidden;" +
+            "background:var(--panel);color:var(--text);font:13px 'Roboto',system-ui,sans-serif";
+          tplBody = p.content;
+        },
+        onclosed: () => { tplPanel = null; tplBody = null; },
+      });
+    } else {
+      tplPanel = document.createElement("div");
+      tplPanel.style.cssText =
+        "position:fixed;right:12px;top:80px;width:640px;height:460px;display:flex;" +
+        "flex-direction:column;background:var(--panel,#fff);color:var(--text,#1f2328);" +
+        "border:1px solid var(--panel-border,#d0d7de);border-radius:8px;overflow:hidden;" +
+        "z-index:9100;box-shadow:0 4px 16px rgba(0,0,0,.18)";
+      document.body.appendChild(tplPanel);
+      tplBody = tplPanel;
+    }
+  }
+
+  function renderTemplateStudio(onApply) {
+    if (!tplBody || !tplCtx) return;
+    tplBody.innerHTML = "";
+    const node = tplCtx.node, key = tplCtx.key;
+
+    // toolbar: {vars} chips derived from the node's input_vars JSON keys
+    const bar = document.createElement("div");
+    bar.className = "tpl-bar";
+    const hint = document.createElement("span");
+    hint.className = "tpl-hint";
+    hint.textContent = "Insert variable:";
+    bar.appendChild(hint);
+    let vars = [];
+    try {
+      const o = JSON.parse(String(node.properties.input_vars || "{}"));
+      if (o && typeof o === "object" && !Array.isArray(o)) vars = Object.keys(o);
+    } catch (e) { /* invalid input_vars — no chips */ }
+
+    const ta = document.createElement("textarea");
+    ta.className = "tpl-editor pp-mono";
+    ta.value = String(node.properties[key] || "");
+    ta.addEventListener("input", () => { commitValue(node, key, ta.value); if (onApply) onApply(); });
+
+    if (vars.length) {
+      for (const v of vars) {
+        const chip = document.createElement("button");
+        chip.type = "button"; chip.className = "tpl-chip"; chip.textContent = "{" + v + "}";
+        chip.addEventListener("click", () => {
+          insertAtCursor(ta, "{" + v + "}");
+          commitValue(node, key, ta.value);
+          if (onApply) onApply();
+          ta.focus();
+        });
+        bar.appendChild(chip);
+      }
+    } else {
+      const none = document.createElement("span");
+      none.className = "tpl-hint";
+      none.textContent = "(define input_vars to get variable chips)";
+      bar.appendChild(none);
+    }
+    tplBody.appendChild(bar);
+    tplBody.appendChild(ta);
+
+    // co-author footer: an instruction + "Improve" → the template_writer LLM rewrites the editor.
+    const foot = document.createElement("div");
+    foot.className = "tpl-foot";
+    const instr = document.createElement("input");
+    instr.type = "text"; instr.className = "pp-input";
+    instr.placeholder = "Ask the writer to change something (e.g. \"add a friendly intro\")…";
+    const improve = document.createElement("button");
+    improve.type = "button"; improve.className = "pp-btn"; improve.textContent = "✨ Improve";
+    const status = document.createElement("span"); status.className = "tpl-status";
+    const runImprove = async () => {
+      const instruction = instr.value.trim();
+      if (!instruction) { instr.focus(); return; }
+      improve.disabled = true; instr.disabled = true;
+      status.classList.remove("tpl-err"); status.textContent = "Writing…";
+      try {
+        const resp = await fetch("admin/tools/template-writer", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template: ta.value, instruction: instruction, vars: vars }),
+        });
+        const d = await resp.json();
+        if (d && d.ok && d.template) {
+          ta.value = d.template; commitValue(node, key, ta.value); if (onApply) onApply();
+          instr.value = ""; status.textContent = "Updated ✓";
+        } else {
+          status.textContent = (d && d.error) ? ("Failed: " + d.error) : "Failed";
+          status.classList.add("tpl-err");
+        }
+      } catch (e) {
+        status.textContent = "Failed: " + e.message; status.classList.add("tpl-err");
+      } finally {
+        improve.disabled = false; instr.disabled = false;
+      }
+    };
+    improve.addEventListener("click", runImprove);
+    instr.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runImprove(); } });
+    foot.appendChild(instr); foot.appendChild(improve); foot.appendChild(status);
+    tplBody.appendChild(foot);
+
+    setTimeout(() => ta.focus(), 0);
+  }
+
+  function openTemplateStudio(node, key, onApply) {
+    tplCtx = { node, key };
+    ensureTemplateStudio();
+    renderTemplateStudio(onApply);
+    if (tplPanel && tplPanel.style) tplPanel.style.display = "";
+    if (tplPanel && typeof tplPanel.front === "function") tplPanel.front();
+  }
+
   // Render ONE field from the block's catalog metadata (f = {key, control, label, values,
   // placeholder, min, max}). The control decides the input: text / number / select /
   // textarea (multi-line prompt) / json (monospace + validation).
@@ -449,6 +587,25 @@
         input.value = cur == null ? "" : String(cur);
         input.addEventListener("change", () => commitValue(node, f.key, input.value));
       }
+    } else if (control === "template") {
+      // The important task-prompt field: an inline textarea for quick edits + a button that
+      // opens the Template Studio (a large dedicated editor with {vars} chips).
+      input = document.createElement("div");
+      input.className = "pp-picker";
+      const ta = document.createElement("textarea");
+      ta.className = "pp-input pp-area";
+      ta.rows = 3;
+      ta.value = cur == null ? "" : String(cur);
+      if (f.placeholder) ta.placeholder = f.placeholder;
+      const paint = () => { ta.value = String(node.properties[f.key] || ""); };
+      ta.addEventListener("change", () => commitValue(node, f.key, ta.value));
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pp-btn";
+      btn.textContent = "⤢ Open studio…";
+      btn.addEventListener("click", () => openTemplateStudio(node, f.key, paint));
+      input.appendChild(ta);
+      input.appendChild(btn);
     } else if (control === "boolean") {
       input = document.createElement("input");
       input.type = "checkbox";

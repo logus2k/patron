@@ -271,6 +271,34 @@ html, body {
 .mcp-desc { font-size: 11.5px; opacity: .62; line-height: 1.35; }
 .mcp-empty { padding: 12px; opacity: .7; }
 
+/* Template Studio: {vars} chip toolbar + a full-height editor */
+.tpl-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 10px 12px; border-bottom: 1px solid var(--panel-border);
+}
+.tpl-hint { opacity: .6; font-size: 12px; }
+.tpl-chip {
+  padding: 3px 9px; cursor: pointer;
+  border: 1px solid var(--panel-border); border-radius: 12px;
+  background: var(--bg); color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+}
+.tpl-chip:hover { border-color: var(--accent); }
+.tpl-editor {
+  flex: 1 1 auto; resize: none; border: none; outline: none;
+  padding: 12px; box-sizing: border-box;
+  background: var(--panel); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+}
+.tpl-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--panel-border);
+}
+.tpl-foot .pp-input { flex: 1 1 auto; min-width: 0; }
+.tpl-foot .pp-btn { flex: 0 0 auto; white-space: nowrap; }
+.tpl-status { flex: 0 0 auto; font-size: 12px; opacity: .7; white-space: nowrap; }
+.tpl-status.tpl-err { color: #e5534b; opacity: 1; }
+
 /* ---- inspector panel ---- */
 #inspect-out {
   margin: 0;

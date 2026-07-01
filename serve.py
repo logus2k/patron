@@ -39,6 +39,8 @@ WA_TARGETS = "/admin/channels/whatsapp/targets"
 MCP_TOOLS = "/admin/channels/mcp/tools"
 # Grounded pickers: the editor reads the real agent_server presets from the runtime admin API.
 PRESETS = "/admin/channels/presets"
+# Template Studio co-author: the editor asks the runtime to improve an input_template via LLM.
+TEMPLATE_WRITER = "/admin/tools/template-writer"
 # agent_runtime admin API (localhost-published by its compose: 127.0.0.1:6817).
 RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstrip("/")
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
@@ -118,6 +120,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._deploy()
         if self.path.split("?")[0] == COMPOSER_COMPILE:
             return self._proxy_post(f"{RUNTIME_URL}{COMPOSER_COMPILE}")
+        if self.path.split("?")[0] == TEMPLATE_WRITER:
+            return self._proxy_post(f"{RUNTIME_URL}{TEMPLATE_WRITER}")
         self.send_error(405, "Method Not Allowed")
 
     def _proxy_post(self, url):
