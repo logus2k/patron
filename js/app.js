@@ -412,6 +412,7 @@
           output: panelRect(outputPanel),
           props: panelRect(window.PatronProps && window.PatronProps.panel ? window.PatronProps.panel() : null),
           mcp: window.PatronProps && window.PatronProps.mcpRect ? window.PatronProps.mcpRect() : null,
+          tpl: window.PatronProps && window.PatronProps.tplRect ? window.PatronProps.tplRect() : null,
         },
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
         zoomVisible: zoomCtl.style.display !== "none",
@@ -459,6 +460,10 @@
     if (window.PatronApp) window.PatronApp.mcpRect = panels.mcp || null;
     const mcpEl = window.PatronProps && window.PatronProps.mcpPanel ? window.PatronProps.mcpPanel() : null;
     if (mcpEl) applyPanelRect(mcpEl, panels.mcp);
+    // Template Studio panel — same lazy pattern (ensureTemplateStudio reads this rect).
+    if (window.PatronApp) window.PatronApp.tplRect = panels.tpl || null;
+    const tplEl = window.PatronProps && window.PatronProps.tplPanel ? window.PatronProps.tplPanel() : null;
+    if (tplEl) applyPanelRect(tplEl, panels.tpl);
     if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
     // Zoom control visibility (default visible).
     const zv = ui.zoomVisible !== false;
@@ -650,6 +655,7 @@
   menuBar.registerCommand("build.run", runOnce);
   menuBar.registerCommand("build.compile", compileToDsl);
   menuBar.registerCommand("build.deploy", deployToRuntime);
+  menuBar.registerCommand("view.resources", () => window.PatronResourceManager && window.PatronResourceManager.open());
   menuBar.registerCommand("view.toolbox", toggleToolbox);
   menuBar.registerCommand("view.zoom", toggleZoomControl);
   menuBar.registerCommand("view.output", toggleOutput);

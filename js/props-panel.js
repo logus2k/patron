@@ -42,27 +42,38 @@
       .catch(() => { /* bridge/runtime unreachable — the field falls back to text entry */ });
   }
 
-  // Grounded picker source: real MCP tool catalog (prefixed names), proxied to the runtime
-  // admin API. Populates the Agent tools allow-list checklist.
-  let MCP_TOOLS = null;
-  function loadMcpTools() {
-    fetch("admin/channels/mcp/tools", { cache: "no-store" })
+  // --- Resource model: ONE generic grounded source for any declared resource. The editor reads
+  // /resources/catalog (descriptors) + /resources/<id> (items), so a field with control
+  // "resource-ref" (+ kind = resource id) renders a picker with NO bespoke code. This is the
+  // generalization of the old per-field loaders (preset/mcp/whatsapp). ---
+  let RESOURCES = null;              // id -> descriptor
+  const RESOURCE_ITEMS = {};         // id -> [items] (session cache; [] also marks in-flight)
+  function loadResources() {
+    fetch("resources/catalog", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d && Array.isArray(d.tools)) { MCP_TOOLS = d.tools; if (open) populate(lastNode); }
+        if (d && Array.isArray(d.resources)) {
+          RESOURCES = {};
+          for (const r of d.resources) RESOURCES[r.id] = r;
+          if (open) populate(lastNode);
+        }
       })
-      .catch(() => { /* mcp-service/runtime unreachable — the field falls back to CSV text */ });
+      .catch(() => { /* runtime unreachable — resource-ref fields fall back to text entry */ });
   }
-
-  // Grounded picker source: real agent_server presets (the persona). Populates the persona dropdown.
-  let PRESETS = null;
-  function loadPresets() {
-    fetch("admin/channels/presets", { cache: "no-store" })
+  function loadResourceItems(id) {
+    if (RESOURCE_ITEMS[id]) return;  // cached / in-flight
+    RESOURCE_ITEMS[id] = [];
+    fetch("resources/" + encodeURIComponent(id), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d && Array.isArray(d.presets)) { PRESETS = d.presets; if (open) populate(lastNode); }
+        if (d && Array.isArray(d.items)) {
+          RESOURCE_ITEMS[id] = d.items;
+          if (open) populate(lastNode);
+          // if the multi-select picker is open on this resource, refresh it now that items arrived
+          if (mcpPanel && mcpCtx && mcpCtx.rid === id) renderMcpPanel(mcpCtx.onApply);
+        }
       })
-      .catch(() => { /* agent_server/runtime unreachable — the field falls back to text entry */ });
+      .catch(() => { /* unreachable — the field falls back to text entry */ });
   }
 
   function ready(cb) {
@@ -253,30 +264,36 @@
   }
 
   function renderMcpPanel(onApply) {
-    if (!mcpBody) return;
+    if (!mcpBody || !mcpCtx) return;
     mcpBody.innerHTML = "";
-    const tools = MCP_TOOLS || [];
+    // GENERIC multi-select over any resource (mcpCtx.rid). Value = descriptor identity;
+    // display name = columns[0]; description = columns[1] (if declared).
+    const d0 = (RESOURCES && RESOURCES[mcpCtx.rid]) || null;
+    const idKey = d0 && d0.identity ? d0.identity : "name";
+    const nameKey = d0 && d0.columns && d0.columns[0] ? d0.columns[0] : idKey;
+    const descKey = d0 && d0.columns && d0.columns[1] ? d0.columns[1] : null;
+    const items = RESOURCE_ITEMS[mcpCtx.rid] || [];
     const sel = mcpSelectedSet();
 
     // toolbar: filter + Select all/Clear + count, all on ONE line
     const bar = document.createElement("div");
     bar.className = "mcp-bar";
     const search = document.createElement("input");
-    search.type = "search"; search.className = "pp-input"; search.placeholder = "Filter tools…";
+    search.type = "search"; search.className = "pp-input"; search.placeholder = "Filter…";
     bar.appendChild(search);
     mcpBody.appendChild(bar);
 
-    if (!tools.length) {
-      // catalog unreachable — never block authoring: let the user type names as CSV.
+    if (!items.length) {
+      // source unreachable / still loading — never block authoring: let the user type CSV.
       const msg = document.createElement("div");
       msg.className = "mcp-empty";
-      msg.textContent = "MCP catalog unreachable — enter tool names as CSV:";
+      msg.textContent = ((d0 && d0.label) || "Items") + " list unavailable — enter values as CSV:";
       const ta = document.createElement("textarea");
       ta.className = "pp-input pp-area pp-mono";
       ta.style.margin = "0 12px 12px";
-      ta.value = mcpCtx ? String(mcpCtx.node.properties[mcpCtx.key] || "") : "";
+      ta.value = String(mcpCtx.node.properties[mcpCtx.key] || "");
       ta.addEventListener("change", () => {
-        if (mcpCtx) { commitValue(mcpCtx.node, mcpCtx.key, ta.value); if (onApply) onApply(); }
+        commitValue(mcpCtx.node, mcpCtx.key, ta.value); if (onApply) onApply();
       });
       mcpBody.appendChild(msg); mcpBody.appendChild(ta);
       return;
@@ -292,36 +309,38 @@
     list.className = "mcp-list";
     mcpBody.appendChild(list);
 
+    const known = new Set(items.map((t) => String(t[idKey])));
     const write = () => {
       const names = [...list.querySelectorAll("input[type=checkbox]:checked")].map((cb) => cb.value);
-      const shown = new Set(tools.map((t) => t.name));
-      for (const n of sel) if (!shown.has(n)) names.push(n); // keep offline-selected ids
-      if (mcpCtx) commitValue(mcpCtx.node, mcpCtx.key, names.join(", "));
+      for (const n of sel) if (!known.has(n)) names.push(n); // keep offline-selected ids
+      commitValue(mcpCtx.node, mcpCtx.key, names.join(", "));
       if (onApply) onApply();
       updateCount();
     };
 
-    const known = new Set(tools.map((t) => t.name));
     const rows = [];
-    const addRow = (name, desc, unknown) => {
+    const addRow = (value, label, desc, unknown) => {
       const row = document.createElement("label");
       row.className = "mcp-row";
       const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.value = name; cb.checked = sel.has(name); cb.className = "pp-check";
+      cb.type = "checkbox"; cb.value = value; cb.checked = sel.has(value); cb.className = "pp-check";
       cb.addEventListener("change", write);
       const txt = document.createElement("div");
       txt.className = "mcp-txt";
       const nm = document.createElement("div"); nm.className = "mcp-name";
-      nm.textContent = unknown ? name + "  (not on server)" : name;
+      nm.textContent = unknown ? value + "  (not on server)" : label;
       txt.appendChild(nm);
-      if (desc) { const d = document.createElement("div"); d.className = "mcp-desc"; d.textContent = desc; txt.appendChild(d); }
+      if (desc) { const dd = document.createElement("div"); dd.className = "mcp-desc"; dd.textContent = desc; txt.appendChild(dd); }
       row.appendChild(cb); row.appendChild(txt);
-      row._hay = (name + " " + (desc || "")).toLowerCase();
+      row._hay = (value + " " + label + " " + (desc || "")).toLowerCase();
       list.appendChild(row);
       rows.push(row);
     };
-    for (const t of tools) addRow(t.name, t.description, false);
-    for (const name of sel) if (!known.has(name)) addRow(name, "", true);
+    for (const t of items) {
+      const v = String(t[idKey]);
+      addRow(v, t[nameKey] != null ? String(t[nameKey]) : v, descKey ? t[descKey] : "", false);
+    }
+    for (const v of sel) if (!known.has(v)) addRow(v, v, "", true);
 
     function updateCount() {
       count.textContent = list.querySelectorAll("input[type=checkbox]:checked").length + " selected";
@@ -342,9 +361,16 @@
     updateCount();
   }
 
-  function openMcpPanel(node, key, onApply) {
-    mcpCtx = { node, key };
+  // Open the generic multi-select picker panel for a resource (rid). onApply repaints the field.
+  function openResourcePicker(node, key, rid, onApply) {
+    mcpCtx = { node, key, rid, onApply };
+    loadResourceItems(rid);           // fetch items (cached); re-renders the panel when they arrive
     ensureMcpPanel();
+    const d0 = (RESOURCES && RESOURCES[rid]) || null;
+    if (mcpPanel && typeof mcpPanel.setHeaderTitle === "function") {
+      const icon = d0 && d0.icon ? d0.icon : "icons/connectors.svg";
+      mcpPanel.setHeaderTitle('<img src="' + icon + '" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">' + ((d0 && d0.label) || "Select") + '</span>');
+    }
     renderMcpPanel(onApply);
     if (mcpPanel && mcpPanel.style) mcpPanel.style.display = "";
     if (mcpPanel && typeof mcpPanel.front === "function") mcpPanel.front();
@@ -362,16 +388,41 @@
     ta.selectionStart = ta.selectionEnd = s + text.length;
   }
 
+  // Position/size persisted in the SERVER workspace (app.js reads PatronProps.tplRect();
+  // applyWorkspace stashes PatronApp.tplRect), exactly like the MCP/Properties panels.
+  const TPL_DEF_W = 640, TPL_DEF_H = 460;
+  function savedTplRect() { return (window.PatronApp && window.PatronApp.tplRect) || null; }
+  function tplRectNow() {
+    if (tplPanel) {
+      const cs = getComputedStyle(tplPanel);
+      return {
+        left: tplPanel.style.left || cs.left, top: tplPanel.style.top || cs.top,
+        width: tplPanel.style.width || cs.width, height: tplPanel.style.height || cs.height,
+        hidden: tplPanel.style.display === "none",
+      };
+    }
+    return savedTplRect();
+  }
+  function stashTplRect() { if (window.PatronApp) window.PatronApp.tplRect = tplRectNow(); }
+
   function ensureTemplateStudio() {
     if (tplPanel) return;
+    const r = savedTplRect();
+    const px = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, "")); return isFinite(n) ? n : 0; };
+    const panelSize = r && r.width && r.height
+      ? { width: px(r.width) || TPL_DEF_W, height: px(r.height) || TPL_DEF_H }
+      : { width: TPL_DEF_W, height: TPL_DEF_H };
+    const position = r && r.left && r.top
+      ? { my: "left-top", at: "left-top", offsetX: px(r.left), offsetY: px(r.top) }
+      : { my: "center", at: "center", offsetX: 0, offsetY: 20 };
     if (typeof jsPanel !== "undefined") {
       tplPanel = jsPanel.create({
         headerTitle: '<img src="icons/chat-bubble-text-square.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Template Studio</span>',
         theme: "none",
         borderRadius: "8px",
         border: "1px solid var(--panel-border)",
-        panelSize: { width: 640, height: 460 },
-        position: { my: "center", at: "center", offsetX: 0, offsetY: 20 },
+        panelSize: panelSize,
+        position: position,
         boxShadow: 3,
         headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
         addCloseControl: 1,
@@ -381,12 +432,15 @@
             "background:var(--panel);color:var(--text);font:13px 'Roboto',system-ui,sans-serif";
           tplBody = p.content;
         },
-        onclosed: () => { tplPanel = null; tplBody = null; },
+        // Remember where it was when closed, so reopening (and the next autosave) keeps it.
+        onclosed: () => { stashTplRect(); tplPanel = null; tplBody = null; },
       });
     } else {
       tplPanel = document.createElement("div");
       tplPanel.style.cssText =
-        "position:fixed;right:12px;top:80px;width:640px;height:460px;display:flex;" +
+        "position:fixed;left:" + (r && r.left ? px(r.left) + "px" : "auto") +
+        ";right:" + (r && r.left ? "auto" : "12px") + ";top:" + (r && r.top ? px(r.top) : 80) + "px;" +
+        "width:" + panelSize.width + "px;height:" + panelSize.height + "px;display:flex;" +
         "flex-direction:column;background:var(--panel,#fff);color:var(--text,#1f2328);" +
         "border:1px solid var(--panel-border,#d0d7de);border-radius:8px;overflow:hidden;" +
         "z-index:9100;box-shadow:0 4px 16px rgba(0,0,0,.18)";
@@ -543,36 +597,37 @@
       });
       idBox.addEventListener("change", () => setTarget(idBox.value));
       extra = idBox;
-    } else if (control === "mcp-tools") {
-      // A read-only input showing the selected tool names + a "…" affordance on the SAME line;
-      // the "…" opens a SEPARATE non-modal panel to pick from the real MCP catalog. Selection is
-      // a CSV of prefixed names, written back live from the panel.
-      input = document.createElement("div");
-      input.className = "pp-picker-row";
-      const box = document.createElement("input");
-      box.type = "text";
-      box.readOnly = true;
-      box.className = "pp-input";
-      box.placeholder = "no tools selected";
-      const paint = () => {
-        const names = String(node.properties[f.key] || "").split(",").map((s) => s.trim()).filter(Boolean);
-        box.value = names.join(", ");
-      };
-      paint();
-      const dots = document.createElement("button");
-      dots.type = "button";
-      dots.className = "pp-dots";
-      dots.textContent = "…";
-      dots.title = "Choose MCP tools";
-      const openPanel = () => openMcpPanel(node, f.key, paint);
-      dots.addEventListener("click", openPanel);
-      box.addEventListener("click", openPanel); // clicking the box opens the picker too
-      input.appendChild(box);
-      input.appendChild(dots);
-    } else if (control === "preset") {
-      // grounded dropdown of real agent_server presets. Preserves the current value even if
-      // it's not (yet) in the list; falls back to a plain text input if presets are unloaded.
-      if (!PRESETS) {
+    } else if (control === "resource-ref") {
+      // GENERIC grounded picker for any declared resource (kind = resource id). Reads the
+      // descriptor (identity/label/columns/multi) + items from /resources/<id>. Single →
+      // dropdown; multi → a read-only summary box + "…" opening the shared multi-select picker
+      // panel. Plain-text fallback if catalog/items aren't loaded (never blocks authoring).
+      const rid = f.kind;
+      const desc = RESOURCES && RESOURCES[rid];
+      if (desc) loadResourceItems(rid);
+      const items = RESOURCE_ITEMS[rid] || [];
+      const idKey = desc && desc.identity ? desc.identity : "id";
+      const labelKey = desc && desc.columns && desc.columns[0] ? desc.columns[0] : idKey;
+      if (desc && desc.multi) {
+        // multi-select → summary box + "…" opens the shared searchable checklist panel
+        input = document.createElement("div");
+        input.className = "pp-picker-row";
+        const box = document.createElement("input");
+        box.type = "text"; box.readOnly = true; box.className = "pp-input";
+        box.placeholder = "none selected";
+        const paint = () => {
+          box.value = String(node.properties[f.key] || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ");
+        };
+        paint();
+        const dots = document.createElement("button");
+        dots.type = "button"; dots.className = "pp-dots"; dots.textContent = "…";
+        dots.title = "Choose " + (desc.label || rid);
+        const openPanel = () => openResourcePicker(node, f.key, rid, paint);
+        dots.addEventListener("click", openPanel);
+        box.addEventListener("click", openPanel);
+        input.appendChild(box); input.appendChild(dots);
+      } else if (!desc || !items.length) {
+        // not-ready single → plain text (never block authoring)
         input = document.createElement("input");
         input.type = "text";
         input.value = cur == null ? "" : String(cur);
@@ -581,9 +636,13 @@
       } else {
         input = document.createElement("select");
         input.appendChild(new Option("— select —", ""));
-        const names = PRESETS.map((p) => p.name);
-        for (const n of names) input.appendChild(new Option(n, n));
-        if (cur && !names.includes(cur)) input.appendChild(new Option(cur + "  (not on server)", cur));
+        const vals = items.map((it) => String(it[idKey]));
+        for (const it of items) {
+          const v = String(it[idKey]);
+          const lab = it[labelKey] != null ? String(it[labelKey]) : v;
+          input.appendChild(new Option(lab === v ? v : lab + "  (" + v + ")", v));
+        }
+        if (cur && !vals.includes(String(cur))) input.appendChild(new Option(cur + "  (not on server)", cur));
         input.value = cur == null ? "" : String(cur);
         input.addEventListener("change", () => commitValue(node, f.key, input.value));
       }
@@ -725,14 +784,14 @@
   function toggle() { setOpen(!open); }
 
   window.PatronProps = { toggle, setOpen, isOpen: () => open, populate, panel: () => panel,
-                         mcpPanel: () => mcpPanel, mcpRect: mcpRectNow };
+                         mcpPanel: () => mcpPanel, mcpRect: mcpRectNow,
+                         tplPanel: () => tplPanel, tplRect: tplRectNow };
 
   ready((app) => {
     const canvas = app.canvas;
     loadCatalog();    // fetch the block field metadata (controls) up front
     loadWaTargets();  // fetch real WhatsApp Groups/Contacts for the grounded target picker
-    loadMcpTools();   // fetch the real MCP tool catalog for the Agent allow-list picker
-    loadPresets();    // fetch the real agent_server presets for the persona dropdown
+    loadResources();  // fetch the resource catalog (descriptors) for generic resource-ref pickers
     if (app.menuBar) {
       app.menuBar.registerCommand("view.properties", toggle);
       app.menuBar.setContext("propsVisible", false);

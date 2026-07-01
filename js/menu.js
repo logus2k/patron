@@ -31,6 +31,13 @@ window.PATRON_MENU = [
     ],
   },
   {
+    label: "Manage",
+    key: "M",
+    items: [
+      { label: "Resource Manager…", command: "view.resources" },
+    ],
+  },
+  {
     label: "View",
     key: "V",
     items: [

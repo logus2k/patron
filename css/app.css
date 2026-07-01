@@ -299,6 +299,20 @@ html, body {
 .tpl-status { flex: 0 0 auto; font-size: 12px; opacity: .7; white-space: nowrap; }
 .tpl-status.tpl-err { color: #e5534b; opacity: 1; }
 
+/* Resource Manager: type selector + search bar, a columns table, a status footer */
+.rm-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--panel-border);
+}
+.rm-bar .pp-input:last-child { flex: 1 1 auto; min-width: 0; }
+.rm-list { flex: 1 1 auto; overflow: auto; padding: 4px 8px; }
+.rm-row { display: flex; gap: 10px; padding: 6px 6px; border-bottom: 1px solid var(--panel-border); }
+.rm-row.rm-head { position: sticky; top: 0; background: var(--panel); font-size: 11px; text-transform: uppercase; opacity: .6; }
+.rm-cell { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.rm-cell:first-child { flex: 1.4 1 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.rm-foot { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--panel-border); font-size: 12px; opacity: .7; }
+.rm-foot.rm-err { color: #e5534b; opacity: 1; }
+
 /* ---- inspector panel ---- */
 #inspect-out {
   margin: 0;

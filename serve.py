@@ -86,6 +86,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._proxy_get(f"{RUNTIME_URL}{MCP_TOOLS}")
         if self.path.split("?")[0] == PRESETS:
             return self._proxy_get(f"{RUNTIME_URL}{PRESETS}")
+        # Resource model: the generic management contract (/resources/catalog, /resources/{id}).
+        if self.path.split("?")[0].startswith("/resources/"):
+            return self._proxy_get(f"{RUNTIME_URL}{self.path}")
         return super().do_GET()
 
     def _proxy_get(self, url):
