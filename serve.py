@@ -32,6 +32,13 @@ DATA = os.path.join(ROOT, "data")
 WORKSPACE = os.path.join(DATA, "workspace.json")
 API = "/api/workspace"
 DEPLOY_API = "/api/deploy"
+# Phase 05 — Project deploy lifecycle. A Patron Project deploys 1:1 to ONE runtime graph
+# record (idempotent by uid, version-bumped): POST /api/projects/<uid>/deploy relays the
+# composition to the runtime POST /admin/projects/<uid>/deploy; POST /api/undeploy/<uid>
+# relays to the runtime undeploy. Same server-to-server pattern as _deploy (the browser is
+# gated under /patron and cannot reach the localhost-bound runtime directly).
+UNDEPLOY_API = "/api/undeploy"           # POST /api/undeploy/<uid>
+ASSET_USAGE_API = "/api/asset-usage"     # GET  /api/asset-usage/<asset_id> (cross-project §9.4)
 # Phase 01 — named Projects (uid/name/description + composition), file-backed under
 # data/projects/<uid>.json. The single workspace.json above stays as the "current open /
 # autosave" doc; a Project is a NAMED, savable composition (block_management.md §9.1).
@@ -108,6 +115,44 @@ def _proj_write(p):
     return p
 
 
+# --- Cross-project asset-usage (§9.4) -----------------------------------------
+# A block's binding is a pointer to an asset id living in the node's `properties`
+# (§5.1 / §9.2): the Agent's `persona` (agent_server preset), the Trigger's schedule,
+# the Destination's `target`. We index those ids per project so a delete can warn when
+# an asset is shared. The keys checked are deliberately broad (a superset) — a false
+# "shared" warning is safe; a missed one is not.
+_ASSET_KEYS = ("persona", "target", "schedule_id", "agent_id", "preset", "rag_id")
+
+
+def _graph_asset_ids(graph):
+    """Every asset id referenced by a project graph's nodes (from block `properties`)."""
+    ids = set()
+    for n in (graph or {}).get("nodes") or []:
+        props = n.get("properties") or {}
+        for k in _ASSET_KEYS:
+            v = props.get(k)
+            if isinstance(v, str) and v.strip():
+                ids.add(v.strip())
+    return ids
+
+
+def _asset_usage_index(exclude_uid=None):
+    """Map asset_id -> [ {uid, name} ] of projects that reference it (optionally
+    excluding one project uid — used when checking what ELSE uses an asset)."""
+    index = {}
+    if not os.path.isdir(PROJECTS):
+        return index
+    for fn in sorted(os.listdir(PROJECTS)):
+        if not fn.endswith(".json"):
+            continue
+        p = _proj_read(fn[:-len(".json")])
+        if not p or p.get("uid") == exclude_uid:
+            continue
+        for aid in _graph_asset_ids(p.get("graph")):
+            index.setdefault(aid, []).append({"uid": p.get("uid"), "name": p.get("name")})
+    return index
+
+
 def _proj_from_body(uid, body):
     return {
         "uid": uid,
@@ -169,6 +214,9 @@ class Handler(SimpleHTTPRequestHandler):
         p0 = self.path.split("?")[0]
         if p0 == PROJECTS_API:
             return self._json(200, {"projects": _proj_list()})
+        # Phase 05 §9.4 — cross-project asset-usage: which OTHER projects reference an asset id.
+        if p0.startswith(ASSET_USAGE_API + "/"):
+            return self._asset_usage(p0[len(ASSET_USAGE_API) + 1:])
         if p0.startswith(PROJECTS_API + "/"):
             proj = _proj_read(p0[len(PROJECTS_API) + 1:])
             return self._json(200, proj) if proj else self._json(404, {"ok": False, "error": "no such project"})
@@ -248,6 +296,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self._project_create()
         if self.path.split("?")[0] == DEPLOY_API:
             return self._deploy()
+        # Phase 05 — Project deploy lifecycle (relay to the runtime graph-record API).
+        p0 = self.path.split("?")[0]
+        if p0.startswith(PROJECTS_API + "/") and p0.endswith("/deploy"):
+            uid = p0[len(PROJECTS_API) + 1:-len("/deploy")]
+            return self._project_deploy(uid)
+        if p0.startswith(UNDEPLOY_API + "/"):
+            return self._project_undeploy(p0[len(UNDEPLOY_API) + 1:])
         if self.path.split("?")[0] == COMPOSER_COMPILE:
             return self._proxy_post(f"{RUNTIME_URL}{COMPOSER_COMPILE}")
         if self.path.split("?")[0] == TEMPLATE_WRITER:
@@ -300,6 +355,64 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(e.code, {"ok": False, "error": f"upstream {e.code}", "detail": detail})
         except urllib.error.URLError as e:
             return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
+
+    # --- Phase 05: Project deploy lifecycle (relay to runtime graph-record API) ---
+    def _project_deploy(self, uid):
+        """Deploy the CURRENT project composition to the runtime as ONE graph record
+        (§9.3, idempotent by uid, version-bumped). Relays the browser's same-origin POST
+        to the runtime ``POST /admin/projects/<uid>/deploy``.
+
+        Body: ``{name, composition:{nodes[], links[]}}`` — the litegraph ``serialize()``
+        graph. Response: the runtime's ``{ok, uid, version, warnings[], firing}`` verbatim,
+        so advisory ``warnings`` reach the Output panel (warn, don't block)."""
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        # Accept either {name, composition} or a bare graph — normalise to the runtime shape.
+        name = (body.get("name") or "").strip()
+        composition = body.get("composition")
+        if composition is None:
+            # A bare serialize() graph was posted: treat the whole body as the composition.
+            composition = {"nodes": body.get("nodes") or [], "links": body.get("links") or []}
+        payload = {"name": name or "Untitled Project", "composition": composition}
+        try:
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/deploy", payload)
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _project_undeploy(self, uid):
+        """Undeploy a Project (§9.4): relay to the runtime ``POST /admin/projects/<uid>/
+        undeploy`` — removes the live record + firing binding, source assets untouched.
+        Idempotent: a not-deployed uid returns ``removed:false`` + a warning, not an error."""
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        try:
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/undeploy", {})
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _asset_usage(self, asset_id):
+        """§9.4 cross-project protection: which OTHER projects reference ``asset_id``.
+        Optional ``?exclude=<uid>`` drops the project being deleted. Returns
+        ``{asset_id, used_by:[{uid,name}], shared: bool}``."""
+        from urllib.parse import parse_qs, urlparse, unquote
+        exclude = (parse_qs(urlparse(self.path).query).get("exclude") or [None])[0]
+        asset_id = unquote(asset_id)
+        used_by = _asset_usage_index(exclude_uid=exclude).get(asset_id, [])
+        return self._json(200, {"asset_id": asset_id, "used_by": used_by, "shared": bool(used_by)})
 
     def _deploy(self):
         """Deploy a compiled agent to BOTH backends: upsert the agent record in

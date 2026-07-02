@@ -333,6 +333,82 @@
     }
   }
 
+  // --- Phase 05: Project deploy lifecycle (§9.3–§9.4) -----------------------
+  // Deploy the CURRENT Project 1:1 to one runtime graph record (idempotent by uid,
+  // version-bumped). We send the litegraph serialize() graph as the composition; the
+  // runtime lowers it, upserts the record, and binds the schedule. Advisory warnings
+  // (no initiator, unbound blocks, type-mismatch) come back in `warnings[]` — we SHOW
+  // them in Output but never block (warn, don't refuse: §9.3).
+  async function deployProject() {
+    if (!window.PatronProjects || !window.PatronProjects.current().uid) {
+      // Deploy needs a stable Project uid (the idempotency key); save first.
+      showOutput();
+      inspectOut.textContent = "Save the project first (File ▸ Save) — Deploy needs a Project uid.";
+      const saved = window.PatronProjects && (await window.PatronProjects.ensureSaved());
+      if (!saved || !saved.uid) return;
+    }
+    const proj = window.PatronProjects.current();
+    const composition = graph.serialize(); // { nodes[], links[] } — the runtime lowers this
+    showOutput();
+    inspectOut.textContent = 'Deploying project "' + proj.name + '" (uid ' + String(proj.uid).slice(0, 8) + ')…';
+    try {
+      const res = await fetch("api/projects/" + proj.uid + "/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: proj.name, composition: composition }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        const warns = (j.warnings || []);
+        const firing = j.firing || {};
+        let msg = '✅ Deployed "' + proj.name + '" — version ' + j.version +
+          " (uid " + String(j.uid).slice(0, 8) + ").\n";
+        msg += firing.bound
+          ? "Firing: bound" + (firing.cron ? " (cron " + firing.cron + ")" : "") +
+            (firing.schedule_id ? " schedule " + String(firing.schedule_id).slice(0, 8) : "") + ".\n"
+          : "Firing: NOT bound — " + (firing.reason || "no initiator") + ".\n";
+        msg += warns.length
+          ? "\n⚠️ " + warns.length + " advisory warning(s) (deployed anyway):\n- " + warns.join("\n- ")
+          : "\nNo warnings.";
+        inspectOut.textContent = msg;
+      } else if (res.status === 422) {
+        inspectOut.textContent = "❌ Deploy refused (422): " + (j.detail || j.error || "invalid composition");
+      } else {
+        inspectOut.textContent = "❌ Deploy failed: " + (j.error || ("HTTP " + res.status)) +
+          (j.detail ? "\n\n" + j.detail : "");
+      }
+    } catch (e) {
+      inspectOut.textContent = "❌ Deploy failed — no Patron server. Run `python3 serve.py`.";
+    }
+  }
+
+  // Undeploy: remove the live runtime record + firing binding. Source assets stay intact
+  // (§9.4). Idempotent — a not-deployed uid returns removed:false + a warning, not an error.
+  async function undeployProject(opts) {
+    const silent = !!(opts && opts.silent);
+    const proj = window.PatronProjects && window.PatronProjects.current();
+    if (!proj || !proj.uid) {
+      if (!silent) { showOutput(); inspectOut.textContent = "This project isn't saved yet — nothing to undeploy."; }
+      return { ok: false, removed: false };
+    }
+    try {
+      const res = await fetch("api/undeploy/" + proj.uid, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!silent) {
+        showOutput();
+        inspectOut.textContent = res.ok && j.ok
+          ? (j.removed ? '🗑️ Undeployed "' + proj.name + '" (record + firing binding removed).'
+                       : 'ℹ️ "' + proj.name + '" was not deployed.') +
+            ((j.warnings || []).length ? "\n- " + j.warnings.join("\n- ") : "")
+          : "❌ Undeploy failed: " + (j.error || ("HTTP " + res.status)) + (j.detail ? "\n\n" + j.detail : "");
+      }
+      return j;
+    } catch (e) {
+      if (!silent) { showOutput(); inspectOut.textContent = "❌ Undeploy failed — no Patron server."; }
+      return { ok: false, removed: false };
+    }
+  }
+
   // The workspace document we persist to the server: the graph (which already
   // carries each node's pos/size) + a separate `ui` metadata block holding panel
   // rects, the canvas pan/zoom, and the theme. UI metadata never touches the graph.
@@ -699,10 +775,61 @@
   }
   async function projectDelete() {
     if (!currentProject.uid) { showOutput(); inspectOut.textContent = "This project isn't saved yet."; return; }
-    if (!confirm('Delete project "' + currentProject.name + '"? This cannot be undone.')) return;
+    // §9.4: deleting a Project undeploys it, then checks cross-project asset usage. Warn
+    // (and require a second confirm) before removing assets other Projects still reference.
+    const shared = await sharedAssetsForCurrentProject();
+    let warn = 'Delete project "' + currentProject.name + '"?\n\nThis undeploys the live record and removes the project.';
+    if (shared.length) {
+      warn += "\n\n⚠️ This project uses " + shared.length + " asset(s) also used by OTHER projects:\n" +
+        shared.map(function (s) {
+          return "  • " + s.asset_id + " — also in: " + s.used_by.map(function (u) { return u.name; }).join(", ");
+        }).join("\n") +
+        "\n\nDeleting the project keeps those shared assets intact (they are reusable).";
+    }
+    if (!confirm(warn)) return;
+    await undeployProject({ silent: true }); // remove the live record + firing binding first
     await fetch(PROJ_API + "/" + currentProject.uid, { method: "DELETE" });
     projectNew();
   }
+
+  // §9.4 cross-project asset-usage: which assets THIS project binds that OTHER projects
+  // also reference. Drives the shared-asset delete warning. Returns
+  // [{asset_id, used_by:[{uid,name}]}].
+  async function collectProjectAssetIds() {
+    const ids = new Set();
+    const KEYS = ["persona", "target", "schedule_id", "agent_id", "preset", "rag_id"];
+    (graph.serialize().nodes || []).forEach(function (n) {
+      const props = n.properties || {};
+      KEYS.forEach(function (k) {
+        const v = props[k];
+        if (typeof v === "string" && v.trim()) ids.add(v.trim());
+      });
+    });
+    return Array.from(ids);
+  }
+  async function sharedAssetsForCurrentProject() {
+    if (!currentProject.uid) return [];
+    const ids = await collectProjectAssetIds();
+    const out = [];
+    for (const aid of ids) {
+      try {
+        const r = await fetch("api/asset-usage/" + encodeURIComponent(aid) + "?exclude=" + currentProject.uid);
+        const j = await r.json().catch(function () { return {}; });
+        if (j.shared && (j.used_by || []).length) out.push(j);
+      } catch (e) { /* server down → skip the check (delete still proceeds after confirm) */ }
+    }
+    return out;
+  }
+
+  // Expose the current Project + a save-if-needed helper so the deploy lifecycle
+  // (defined earlier) can reach the project closure state.
+  window.PatronProjects = {
+    current: function () { return currentProject; },
+    ensureSaved: async function () {
+      if (!currentProject.uid) await projectSaveAs();
+      return currentProject;
+    },
+  };
 
   // Insert a block at the current view center (Insert menu / edge menu share the idea).
   function insertBlock(type) {
@@ -741,7 +868,11 @@
    "transform", "composite", "whatsapp", "tts", "bus", "file_destination", "web_destination"]
     .forEach((t) => menuBar.registerCommand("insert." + t, () => insertBlock(t)));
   // --- Build ---
-  menuBar.registerCommand("build.deploy", deployToRuntime);
+  // Phase 05: Deploy/Undeploy now operate on the whole PROJECT (1:1 → one runtime graph
+  // record, §9.3), replacing the old single-agent deployToRuntime (kept for reference).
+  menuBar.registerCommand("build.deploy", deployProject);
+  menuBar.registerCommand("build.undeploy", undeployProject);
+  menuBar.registerCommand("build.deleteDeployment", projectDelete);
   menuBar.registerCommand("build.compile", compileToDsl);
   // --- View ---
   menuBar.registerCommand("view.toolbox", toggleToolbox);
@@ -757,7 +888,7 @@
   // --- Planned (stubs — announce, don't crash) ---
   ["project.import", "project.export",
    "edit.undo", "edit.redo",
-   "build.validate", "build.undeploy", "build.deleteDeployment", "build.status",
+   "build.validate", "build.status",
    "view.fit", "help.docs", "help.shortcuts"]
     .forEach((id) => menuBar.registerCommand(id, () => stub(id)));
 
