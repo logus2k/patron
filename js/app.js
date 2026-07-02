@@ -10,30 +10,14 @@
     return;
   }
 
-  // Register both node sets: the runtime-aligned agent vocabulary (the real
-  // authoring target) and the GoF demo nodes (conceptual inspiration).
+  // Register the runtime-aligned agent vocabulary (the real authoring target).
   global.PatronAgentNodes.register(LiteGraph);
-  global.PatronPatterns.register(LiteGraph);
-  const COLORS = global.PatronPatterns.CATEGORY_COLORS;
 
-  // Palette definition: display metadata for the toolbox. Agent vocabulary first.
+  // Palette definition: display metadata for the toolbox.
   const PALETTE = [
+    global.PatronAgentNodes.INITIATORS,
     global.PatronAgentNodes.PALETTE,
     global.PatronAgentNodes.DESTINATIONS,
-    { group: "GoF demo · Utility", color: COLORS.Utility, items: [
-      { type: "patron/task_source", label: "Task Source" },
-      { type: "patron/inspector", label: "Inspector" },
-    ]},
-    { group: "GoF demo · Creational", color: COLORS.Creational, items: [
-      { type: "patron/builder", label: "Builder Agent" },
-      { type: "patron/factory", label: "Factory Agent" },
-    ]},
-    { group: "GoF demo · Structural", color: COLORS.Structural, items: [
-      { type: "patron/proxy", label: "Proxy Agent" },
-    ]},
-    { group: "GoF demo · Behavioral", color: COLORS.Behavioral, items: [
-      { type: "patron/chain_of_responsibility", label: "Chain of Responsibility" },
-    ]},
   ];
 
   // --- graph + canvas -------------------------------------------------------
@@ -185,8 +169,7 @@
       g.className = "palette-group";
       const label = document.createElement("div");
       label.className = "group-label";
-      // Drop the "GoF demo ·" prefix; all section titles are UPPERCASE.
-      label.textContent = grp.group.replace(/^GoF demo\s*[·-]\s*/, "").toUpperCase();
+      label.textContent = grp.group.toUpperCase();
       g.appendChild(label);
 
       grp.items.forEach((it) => {
@@ -225,13 +208,6 @@
     return node;
   }
 
-  // Set both the property and its widget so the change is visible on the node.
-  function setWidget(node, name, value) {
-    node.properties[name] = value;
-    const w = (node.widgets || []).find((w) => w.name === name);
-    if (w) w.value = value;
-  }
-
   // canvas drop target
   canvasEl.addEventListener("dragover", (e) => e.preventDefault());
   canvasEl.addEventListener("drop", (e) => {
@@ -242,40 +218,6 @@
     spawnNode(type, pos);
   });
 
-  // --- demo composition (data spec §4) -------------------------------------
-  function loadDemo() {
-    graph.clear();
-    for (const k in inspectState) delete inspectState[k];
-    inspectOut.textContent = "Run the graph to see data flow…";
-
-    const source = spawnNode("patron/task_source", [40, 200]);
-    // Curate the demo for a clean first impression: "high" complexity routes
-    // cloud → high confidence → resolves → approved, lighting the full main
-    // pipeline. Lower it to low/medium to watch the Chain escalate instead.
-    setWidget(source, "complexity", "high");
-    const builder = spawnNode("patron/builder", [340, 90]);
-    const factory = spawnNode("patron/factory", [340, 320]);
-    const chain = spawnNode("patron/chain_of_responsibility", [660, 200]);
-    const proxy = spawnNode("patron/proxy", [980, 150]);
-    const okSink = spawnNode("patron/inspector", [1260, 60]);
-    const rejectSink = spawnNode("patron/inspector", [1260, 260]);
-    const escSink = spawnNode("patron/inspector", [980, 360]);
-
-    // task → builder.task ; task → factory.task
-    source.connect(0, builder, 0);
-    source.connect(0, factory, 0);
-    // builder.context → chain.context ; factory.agentref → chain.agentref
-    builder.connect(0, chain, 0);
-    factory.connect(0, chain, 1);
-    // chain.resolved → proxy.result ; chain.escalated → escSink
-    chain.connect(0, proxy, 0);
-    chain.connect(1, escSink, 0);
-    // proxy.approved → okSink ; proxy.rejected → rejectSink
-    proxy.connect(0, okSink, 0);
-    proxy.connect(1, rejectSink, 0);
-
-    graph.setDirtyCanvas(true, true);
-  }
 
   // --- execution ------------------------------------------------------------
   function runOnce() {
@@ -655,7 +597,6 @@
   menuBar.render();
   menuBar.registerCommand("file.clear", clearCanvas);
   menuBar.registerCommand("file.news", loadNewsAgent);
-  menuBar.registerCommand("file.demo", () => { loadDemo(); runOnce(); });
   menuBar.registerCommand("file.save", () => saveWorkspace());
   menuBar.registerCommand("file.load", loadWorkspace);
   menuBar.registerCommand("build.run", runOnce);

@@ -13,15 +13,20 @@
   // Keyed by the composer block kind (== graph node type). New vocabulary only.
   // type id -> { file } (colored svg, as-is) | { color, paths } (recolorable Lucide line)
   const ICONS = {
-    "trigger":   { file: "icons/clock-alarm-20.svg" },
-    "agent":     { file: "icons/robot.svg" },
-    "transform": { file: "icons/arrow-transfer-horizontal-square.svg" },
-    "branch":    { file: "icons/nodes-right.svg" },
-    "loop":      { file: "icons/arrow-transfer-horizontal-square.svg" },
-    "composite": { file: "icons/table.svg" },
-    "whatsapp":  { file: "icons/whatsapp-icon.svg" },
-    "tts":       { file: "icons/voice-activation-1.svg" },
-    "bus":       { file: "icons/bus.svg" },
+    "trigger":         { file: "icons/clock-alarm-20.svg" },
+    "file_initiator":  { file: "icons/nodes-right.svg" },
+    "web_initiator":   { file: "icons/connectors.svg" },
+    "stt_initiator":   { file: "icons/left-speech-bubble.svg" },
+    "agent":           { file: "icons/robot.svg" },
+    "rag":             { file: "icons/search.svg" },
+    "guardrail":       { file: "icons/check-badge.svg" },
+    "transform":       { file: "icons/arrow-transfer-horizontal-square.svg" },
+    "composite":       { file: "icons/table.svg" },
+    "whatsapp":        { file: "icons/whatsapp-icon.svg" },
+    "tts":             { file: "icons/voice-activation-1.svg" },
+    "bus":             { file: "icons/bus.svg" },
+    "file_destination":{ file: "icons/json.svg" },
+    "web_destination": { file: "icons/send-email-flat.svg" },
   };
 
   function lucideSvg(paths, size, col) {

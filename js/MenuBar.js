@@ -4,7 +4,7 @@
  * separators, checkboxes/radios, Alt+key access, and keyboard shortcuts.
  *
  * Only change vs. the source: the ES-module `export` is swapped for Patron's
- * classic-script global (window.MenuBar), matching patterns.js / agent_nodes.js.
+ * classic-script global (window.MenuBar), matching agent_nodes.js.
  * Re-sync from noted if the upstream component changes.
  */
 (function (global) {

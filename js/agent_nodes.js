@@ -1,8 +1,9 @@
 /*
  * agent_nodes.js — the composer authoring vocabulary for Patron (NEW structure).
  *
- * Node types == the composer Block kinds (trigger / agent / transform / branch / loop /
- * composite / whatsapp / tts / bus). One "flow" wire between blocks; capabilities
+ * Node types == the composer Block kinds (trigger / file_initiator / web_initiator /
+ * stt_initiator / agent / rag / guardrail / transform / composite / whatsapp / tts /
+ * bus / file_destination / web_destination). One "flow" wire between blocks; capabilities
  * (tools/rag/guardrails) are CONFIG on the Agent, not separate nodes. There is NO legacy
  * vocabulary and NO adapter — a graph of these lowers directly via agent_runtime's
  * /composer/compile.
@@ -19,7 +20,6 @@
   const TYPES = { FLOW: "flow" };
 
   const COLOR = "#8ec9a8";   // agent/activity — soft pastel green
-  const CTRL = "#c9b58e";    // control (branch/loop) — warm sand
   const DEST = "#8193ad";    // destination — slate
 
   const MIN_W = 180, MAX_W = 560;
@@ -186,8 +186,40 @@
       textW(this, "timezone");
       apply(this, COLOR);
     }
-    Trigger.title = "Trigger";
-    Trigger.desc = "Boundary source: fires the agent; holds its id + schedule.";
+    Trigger.title = "Schedule Trigger";
+    Trigger.desc = "Boundary source: fires the agent on a schedule; holds its id + cron/timezone.";
+
+    // --- File Initiator: fires when a file appears/changes in a watched folder -
+    function FileInitiator() {
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("watch_path", "");
+      this.addProperty("patterns", "*");
+      textW(this, "watch_path");
+      textW(this, "patterns");
+      apply(this, COLOR);
+    }
+    FileInitiator.title = "File Initiator";
+    FileInitiator.desc = "Boundary source: fires the workflow when a new/changed file is detected in a folder.";
+
+    // --- Web Initiator: fires when a request hits a configured route ----------
+    function WebInitiator() {
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("route", "");
+      textW(this, "route");
+      apply(this, COLOR);
+    }
+    WebInitiator.title = "Web Initiator";
+    WebInitiator.desc = "Boundary source: fires the workflow on an inbound request to a Web API route.";
+
+    // --- STT Initiator: fires when incoming speech is transcribed to text -----
+    function SttInitiator() {
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("source", "");
+      textW(this, "source");
+      apply(this, COLOR);
+    }
+    SttInitiator.title = "Speech-to-Text";
+    SttInitiator.desc = "Boundary source: fires the workflow when incoming speech is transcribed (speech-to-text).";
 
     // --- Agent: the workhorse; capabilities are CONFIG ------------------------
     function Agent() {
@@ -222,6 +254,32 @@
     Agent.title = "Agent";
     Agent.desc = "The workhorse: persona (selects the model), tools/memory as config, runs the tool loop.";
 
+    // --- RAG: pre-inference retrieve-then-inject (wire before an Agent) -------
+    function Rag() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("rewriter", "");
+      this.addProperty("domains", "");
+      textW(this, "rewriter");
+      textW(this, "domains");
+      apply(this, COLOR);
+    }
+    Rag.title = "RAG";
+    Rag.desc = "Pre-inference retrieve-then-inject; wire before an Agent to augment its input.";
+
+    // --- Guardrail: input/output checks (wire before/after an Agent) ----------
+    function Guardrail() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("forbidden", "");
+      this.addProperty("min_confidence", 0.5);
+      textW(this, "forbidden");
+      numW(this, "min_confidence", 0, 1);
+      apply(this, COLOR);
+    }
+    Guardrail.title = "Guardrail";
+    Guardrail.desc = "Checks (forbidden patterns / min confidence); wire before/after an Agent.";
+
     // --- Transform: deterministic map (can be LLM-generated) ------------------
     function Transform() {
       this.addInput("in", TYPES.FLOW);
@@ -232,32 +290,6 @@
     }
     Transform.title = "Transform";
     Transform.desc = "Deterministic map in→out; body can be generated from the port schemas.";
-
-    // --- Branch: conditional routing (Control) --------------------------------
-    function Branch() {
-      this.addInput("in", TYPES.FLOW);
-      this.addOutput("then", TYPES.FLOW);
-      this.addOutput("else", TYPES.FLOW);
-      this.addProperty("predicate", "");
-      textW(this, "predicate");
-      apply(this, CTRL);
-    }
-    Branch.title = "Branch";
-    Branch.desc = "Control: route in → one of several guarded outs at run time.";
-
-    // --- Loop: bounded repetition (Control) -----------------------------------
-    function Loop() {
-      this.addInput("in", TYPES.FLOW);
-      this.addOutput("body", TYPES.FLOW);
-      this.addOutput("exit", TYPES.FLOW);
-      this.addProperty("condition", "");
-      this.addProperty("max_iter", 10);
-      textW(this, "condition");
-      numW(this, "max_iter", 1, null, 0);
-      apply(this, CTRL);
-    }
-    Loop.title = "Loop";
-    Loop.desc = "Control: repeat the body until a condition holds or max_iter is hit.";
 
     // --- Composite: a workflow-as-a-block (nesting) ---------------------------
     function Composite() {
@@ -302,35 +334,54 @@
     const WhatsApp = destination("whatsapp", "", "chat id");
     WhatsApp.title = "WhatsApp";
     const Tts = destination("tts", "", "voice/session");
-    Tts.title = "TTS";
+    Tts.title = "Text-to-Speech";
     const Bus = destination("bus", "", "stream id");
     Bus.title = "Bus";
+    const FileDestination = destination("file", "", "file path");
+    FileDestination.title = "File Destination";
+    const WebDestination = destination("web", "", "url");
+    WebDestination.title = "Web Destination";
 
     const REGISTRY = [
       ["trigger", Trigger],
+      ["file_initiator", FileInitiator],
+      ["web_initiator", WebInitiator],
+      ["stt_initiator", SttInitiator],
       ["agent", Agent],
+      ["rag", Rag],
+      ["guardrail", Guardrail],
       ["transform", Transform],
-      ["branch", Branch],
-      ["loop", Loop],
       ["composite", Composite],
       ["whatsapp", WhatsApp],
       ["tts", Tts],
       ["bus", Bus],
+      ["file_destination", FileDestination],
+      ["web_destination", WebDestination],
     ];
     REGISTRY.forEach(([path, ctor]) => LiteGraph.registerNodeType(path, ctor));
     return REGISTRY.map(([path]) => path);
   }
 
-  // Palette groups for the toolbox (app.js renders them).
+  // Palette groups for the toolbox (app.js renders them), matching the roster
+  // categories in specs/toolbox_blocks.md: Initiators / Blocks / Destinations.
+  const INITIATORS = {
+    group: "Initiators",
+    color: COLOR,
+    items: [
+      { type: "trigger", label: "Schedule Trigger" },
+      { type: "file_initiator", label: "File Initiator" },
+      { type: "web_initiator", label: "Web Initiator" },
+      { type: "stt_initiator", label: "Speech-to-Text" },
+    ],
+  };
   const PALETTE = {
     group: "Blocks",
     color: COLOR,
     items: [
-      { type: "trigger", label: "Trigger" },
       { type: "agent", label: "Agent" },
+      { type: "rag", label: "RAG" },
+      { type: "guardrail", label: "Guardrail" },
       { type: "transform", label: "Transform" },
-      { type: "branch", label: "Branch" },
-      { type: "loop", label: "Loop" },
       { type: "composite", label: "Workflow" },
     ],
   };
@@ -339,10 +390,12 @@
     color: DEST,
     items: [
       { type: "whatsapp", label: "WhatsApp" },
-      { type: "tts", label: "TTS" },
+      { type: "tts", label: "Text-to-Speech" },
       { type: "bus", label: "Bus" },
+      { type: "file_destination", label: "File Destination" },
+      { type: "web_destination", label: "Web Destination" },
     ],
   };
 
-  global.PatronAgentNodes = { TYPES, PALETTE, DESTINATIONS, register };
+  global.PatronAgentNodes = { TYPES, INITIATORS, PALETTE, DESTINATIONS, register };
 })(window);
