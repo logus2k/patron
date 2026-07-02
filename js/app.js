@@ -595,19 +595,59 @@
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
-  menuBar.registerCommand("file.clear", clearCanvas);
-  menuBar.registerCommand("file.news", loadNewsAgent);
-  menuBar.registerCommand("file.save", () => saveWorkspace());
-  menuBar.registerCommand("file.load", loadWorkspace);
-  menuBar.registerCommand("build.run", runOnce);
-  menuBar.registerCommand("build.compile", compileToDsl);
+
+  // Insert a block at the current view center (Insert menu / edge menu share the idea).
+  function insertBlock(type) {
+    const ds = lgcanvas.ds;
+    const rect = (lgcanvas.canvas || canvasEl).getBoundingClientRect();
+    const gx = (rect.width / 2) / ds.scale - ds.offset[0];
+    const gy = (rect.height / 2) / ds.scale - ds.offset[1];
+    const n = spawnNode(type, [gx - 90, gy - 30]);
+    if (n) { if (lgcanvas.selectNode) lgcanvas.selectNode(n); lgcanvas.setDirty(true, true); }
+  }
+  // Planned-but-unimplemented menu items: announce, never crash.
+  function stub(id) {
+    const m = id + " — planned (not implemented yet).";
+    if (inspectOut) inspectOut.textContent = m;
+    console.log("[Patron] " + m);
+  }
+
+  // --- Project ---
+  menuBar.registerCommand("project.new", clearCanvas);
+  menuBar.registerCommand("project.open", loadWorkspace);
+  menuBar.registerCommand("project.save", () => saveWorkspace());
+  // --- Edit ---
+  menuBar.registerCommand("edit.clear", clearCanvas);
+  menuBar.registerCommand("edit.delete", () => { if (lgcanvas.deleteSelectedNodes) lgcanvas.deleteSelectedNodes(); lgcanvas.setDirty(true, true); scheduleSave(); });
+  menuBar.registerCommand("edit.selectAll", () => { if (lgcanvas.selectNodes) lgcanvas.selectNodes(graph._nodes); lgcanvas.setDirty(true, true); });
+  menuBar.registerCommand("edit.copy", () => { if (lgcanvas.copyToClipboard) lgcanvas.copyToClipboard(); });
+  menuBar.registerCommand("edit.paste", () => { if (lgcanvas.pasteFromClipboard) lgcanvas.pasteFromClipboard(); scheduleSave(); });
+  menuBar.registerCommand("edit.cut", () => { if (lgcanvas.copyToClipboard) lgcanvas.copyToClipboard(); if (lgcanvas.deleteSelectedNodes) lgcanvas.deleteSelectedNodes(); scheduleSave(); });
+  menuBar.registerCommand("edit.duplicate", () => { if (lgcanvas.copyToClipboard) { lgcanvas.copyToClipboard(); lgcanvas.pasteFromClipboard(); scheduleSave(); } });
+  // --- Insert (one command per block type → drops at view center) ---
+  ["trigger", "file_initiator", "web_initiator", "stt_initiator", "agent", "rag", "guardrail",
+   "transform", "composite", "whatsapp", "tts", "bus", "file_destination", "web_destination"]
+    .forEach((t) => menuBar.registerCommand("insert." + t, () => insertBlock(t)));
+  // --- Build ---
   menuBar.registerCommand("build.deploy", deployToRuntime);
-  menuBar.registerCommand("view.resources", () => window.PatronResourceManager && window.PatronResourceManager.open());
+  menuBar.registerCommand("build.compile", compileToDsl);
+  // --- View ---
   menuBar.registerCommand("view.toolbox", toggleToolbox);
   menuBar.registerCommand("view.zoom", toggleZoomControl);
   menuBar.registerCommand("view.output", toggleOutput);
-  menuBar.registerCommand("view.theme", toggleTheme);
+  menuBar.registerCommand("theme.dark", () => { applyTheme("dark"); scheduleSave(); });
+  menuBar.registerCommand("theme.white", () => { applyTheme("light"); scheduleSave(); });
+  menuBar.registerCommand("view.zoomIn", () => setZoom((lgcanvas.ds.scale || 1) * 1.1));
+  menuBar.registerCommand("view.zoomOut", () => setZoom((lgcanvas.ds.scale || 1) / 1.1));
+  menuBar.registerCommand("view.resetZoom", () => setZoom(1));
+  // --- Help ---
   menuBar.registerCommand("help.about", showAbout);
+  // --- Planned (stubs — announce, don't crash) ---
+  ["project.saveAs", "project.rename", "project.settings", "project.delete", "project.import", "project.export",
+   "edit.undo", "edit.redo",
+   "build.validate", "build.undeploy", "build.deleteDeployment", "build.status",
+   "view.fit", "help.docs", "help.shortcuts"]
+    .forEach((id) => menuBar.registerCommand(id, () => stub(id)));
 
   // jsPanel's default close icon is a heavy FILLED "✕"; swap it for a thin stroked X so it
   // reads lighter. Set globally before any panel is created (covers all panels).

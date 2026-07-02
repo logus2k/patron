@@ -19,8 +19,9 @@
   // One flow wire between blocks (the typed-slot zoo is gone).
   const TYPES = { FLOW: "flow" };
 
-  const COLOR = "#8ec9a8";   // agent/activity — soft pastel green
-  const DEST = "#8193ad";    // destination — slate
+  const COLOR = "#8ec9a8";   // Blocks (agent/activity) — pastel green
+  const INIT = "#d79a9a";    // Initiators (boundary sources) — pastel red
+  const DEST = "#8fb3d9";    // Destinations — pastel blue
 
   const MIN_W = 180, MAX_W = 560;
   const VAL_SLOT = 48;
@@ -54,7 +55,7 @@
 
   // Apply the block look + content-aware width; color is re-applied on load (configure).
   function apply(node, color) {
-    node.color = color;
+    node._accent = color;   // category accent — small left border stripe (title stays neutral)
     const baseCompute = node.computeSize;
     const baseConfigure = node.configure;
     node.computeSize = function (out) {
@@ -69,7 +70,7 @@
     };
     node.configure = function (info) {
       baseConfigure.call(this, info);
-      this.color = color;
+      this._accent = color;
       syncWidgets(this);          // show loaded values, not constructor defaults
       if (this.size) {
         this.size[0] = Math.min(MAX_W, Math.max(this.size[0], contentWidth(this)));
@@ -78,6 +79,7 @@
     };
     node.size = node.computeSize();
     iconize(node);
+    accentize(node);
   }
 
   function iconize(node) {
@@ -98,6 +100,27 @@
       if (ctx.roundRect) ctx.roundRect(0, -title_height, size[0] + 1, title_height, [r, r, 0, 0]);
       else ctx.rect(0, -title_height, size[0] + 1, title_height);
       ctx.fill();
+    };
+  }
+
+  // Small left-border accent stripe in the category color (title stays neutral),
+  // mirroring the Toolbox item accent. Drawn in the foreground over title + body.
+  function accentize(node) {
+    const prevFg = node.onDrawForeground;
+    node.onDrawForeground = function (ctx, canvas) {
+      if (prevFg) prevFg.call(this, ctx, canvas);
+      if (this.flags && this.flags.collapsed) return;
+      const th = (typeof LiteGraph !== "undefined" && LiteGraph.NODE_TITLE_HEIGHT) || 24;
+      const h = (this.size && this.size[1]) || 0;
+      const r = this.round_radius || 8;
+      const W = 4; // stripe width
+      ctx.save();
+      ctx.fillStyle = this._accent || "#888";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, -th, W, th + h, [r, 0, 0, r]);
+      else ctx.rect(0, -th, W, th + h);
+      ctx.fill();
+      ctx.restore();
     };
   }
 
@@ -184,9 +207,9 @@
       comboW(this, "trigger_type", ["schedule", "channel"]);
       textW(this, "cron");
       textW(this, "timezone");
-      apply(this, COLOR);
+      apply(this, INIT);
     }
-    Trigger.title = "Schedule Trigger";
+    Trigger.title = "Scheduled Trigger";
     Trigger.desc = "Boundary source: fires the agent on a schedule; holds its id + cron/timezone.";
 
     // --- File Initiator: fires when a file appears/changes in a watched folder -
@@ -196,7 +219,7 @@
       this.addProperty("patterns", "*");
       textW(this, "watch_path");
       textW(this, "patterns");
-      apply(this, COLOR);
+      apply(this, INIT);
     }
     FileInitiator.title = "File Initiator";
     FileInitiator.desc = "Boundary source: fires the workflow when a new/changed file is detected in a folder.";
@@ -206,7 +229,7 @@
       this.addOutput("out", TYPES.FLOW);
       this.addProperty("route", "");
       textW(this, "route");
-      apply(this, COLOR);
+      apply(this, INIT);
     }
     WebInitiator.title = "Web Initiator";
     WebInitiator.desc = "Boundary source: fires the workflow on an inbound request to a Web API route.";
@@ -216,7 +239,7 @@
       this.addOutput("out", TYPES.FLOW);
       this.addProperty("source", "");
       textW(this, "source");
-      apply(this, COLOR);
+      apply(this, INIT);
     }
     SttInitiator.title = "Speech-to-Text";
     SttInitiator.desc = "Boundary source: fires the workflow when incoming speech is transcribed (speech-to-text).";
@@ -288,7 +311,7 @@
       textW(this, "script");
       apply(this, COLOR);
     }
-    Transform.title = "Transform";
+    Transform.title = "Data Transform";
     Transform.desc = "Deterministic map in→out; body can be generated from the port schemas.";
 
     // --- Composite: a workflow-as-a-block (nesting) ---------------------------
@@ -336,7 +359,7 @@
     const Tts = destination("tts", "", "voice/session");
     Tts.title = "Text-to-Speech";
     const Bus = destination("bus", "", "stream id");
-    Bus.title = "Bus";
+    Bus.title = "Event Bus";
     const FileDestination = destination("file", "", "file path");
     FileDestination.title = "File Destination";
     const WebDestination = destination("web", "", "url");
@@ -366,9 +389,9 @@
   // categories in specs/toolbox_blocks.md: Initiators / Blocks / Destinations.
   const INITIATORS = {
     group: "Initiators",
-    color: COLOR,
+    color: INIT,
     items: [
-      { type: "trigger", label: "Schedule Trigger" },
+      { type: "trigger", label: "Scheduled Trigger" },
       { type: "file_initiator", label: "File Initiator" },
       { type: "web_initiator", label: "Web Initiator" },
       { type: "stt_initiator", label: "Speech-to-Text" },
@@ -381,7 +404,7 @@
       { type: "agent", label: "Agent" },
       { type: "rag", label: "RAG" },
       { type: "guardrail", label: "Guardrail" },
-      { type: "transform", label: "Transform" },
+      { type: "transform", label: "Data Transform" },
       { type: "composite", label: "Workflow" },
     ],
   };
@@ -391,7 +414,7 @@
     items: [
       { type: "whatsapp", label: "WhatsApp" },
       { type: "tts", label: "Text-to-Speech" },
-      { type: "bus", label: "Bus" },
+      { type: "bus", label: "Event Bus" },
       { type: "file_destination", label: "File Destination" },
       { type: "web_destination", label: "Web Destination" },
     ],

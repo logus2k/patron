@@ -66,9 +66,9 @@ Add a block to the canvas by category — mirrors the Toolbox groups
 
 | Submenu | Items |
 |---|---|
-| Initiators ▸ | Schedule Trigger · File Initiator · Web Initiator · Speech-to-Text |
-| Blocks ▸ | Agent · RAG · Guardrail · Transform · Workflow |
-| Destinations ▸ | WhatsApp · Text-to-Speech · Bus · File Destination · Web Destination |
+| Initiators ▸ | Scheduled Trigger · File Initiator · Web Initiator · Speech-to-Text |
+| Blocks ▸ | Agent · RAG · Guardrail · Data Transform · Workflow |
+| Destinations ▸ | WhatsApp · Text-to-Speech · Event Bus · File Destination · Web Destination |
 
 ### Build  *(kept; now holds the Deploy lifecycle)*
 | Item | Shortcut | Command id | Status |
@@ -117,7 +117,7 @@ then `Delete link`. Cumbersome.
 │  Agent              │
 │  RAG                │   ← insertable (pass-through) blocks, flat
 │  Guardrail          │
-│  Transform          │
+│  Data Transform     │
 │  Workflow           │
 │ ─────────────────── │
 │  Delete Edge        │   ← last item, after the separator

@@ -5,26 +5,84 @@
  * works both under serve.py AND over file:// (a fetch of a local .json fails on
  * file://, which would leave the menubar empty). Commands are wired to Patron's
  * app functions in app.js (registerCommand). Keep command ids in sync there.
+ *
+ * Structure per specs/menu_revision.md: Project · Edit · Insert · Build · View · Help.
+ * (Per-block management is NOT here — it's a double-click on the block.)
  */
 window.PATRON_MENU = [
   {
-    label: "File",
-    key: "F",
+    label: "Project",
+    key: "P",
     items: [
-      { label: "New / Clear Canvas", command: "file.clear" },
+      { label: "New Project", shortcut: "Ctrl+N", command: "project.new" },
+      { label: "Open Project…", shortcut: "Ctrl+O", command: "project.open" },
       { type: "separator" },
-      { label: "Load News Agent", command: "file.news" },
+      { label: "Save", shortcut: "Ctrl+S", command: "project.save" },
+      { label: "Save As…", shortcut: "Ctrl+Shift+S", command: "project.saveAs" },
+      { label: "Rename…", command: "project.rename" },
+      { label: "Project Settings…", command: "project.settings" },
       { type: "separator" },
-      { label: "Save Workspace", shortcut: "Ctrl+S", command: "file.save" },
-      { label: "Load Workspace", command: "file.load" },
+      { label: "Delete Project…", command: "project.delete" },
+      { type: "separator" },
+      { label: "Import…", command: "project.import" },
+      { label: "Export…", command: "project.export" },
+    ],
+  },
+  {
+    label: "Edit",
+    key: "E",
+    items: [
+      { label: "Undo", shortcut: "Ctrl+Z", command: "edit.undo" },
+      { label: "Redo", shortcut: "Ctrl+Shift+Z", command: "edit.redo" },
+      { type: "separator" },
+      { label: "Cut", shortcut: "Ctrl+X", command: "edit.cut" },
+      { label: "Copy", shortcut: "Ctrl+C", command: "edit.copy" },
+      { label: "Paste", shortcut: "Ctrl+V", command: "edit.paste" },
+      { label: "Duplicate", shortcut: "Ctrl+D", command: "edit.duplicate" },
+      { label: "Delete Selection", shortcut: "Delete", command: "edit.delete" },
+      { label: "Select All", shortcut: "Ctrl+A", command: "edit.selectAll" },
+      { type: "separator" },
+      { label: "Clear Canvas", command: "edit.clear" },
+    ],
+  },
+  {
+    label: "Insert",
+    key: "I",
+    items: [
+      { label: "Initiators", submenu: [
+        { label: "Scheduled Trigger", command: "insert.trigger" },
+        { label: "File Initiator", command: "insert.file_initiator" },
+        { label: "Web Initiator", command: "insert.web_initiator" },
+        { label: "Speech-to-Text", command: "insert.stt_initiator" },
+      ]},
+      { label: "Blocks", submenu: [
+        { label: "Agent", command: "insert.agent" },
+        { label: "RAG", command: "insert.rag" },
+        { label: "Guardrail", command: "insert.guardrail" },
+        { label: "Data Transform", command: "insert.transform" },
+        { label: "Workflow", command: "insert.composite" },
+      ]},
+      { label: "Destinations", submenu: [
+        { label: "WhatsApp", command: "insert.whatsapp" },
+        { label: "Text-to-Speech", command: "insert.tts" },
+        { label: "Event Bus", command: "insert.bus" },
+        { label: "File Destination", command: "insert.file_destination" },
+        { label: "Web Destination", command: "insert.web_destination" },
+      ]},
     ],
   },
   {
     label: "Build",
     key: "B",
     items: [
-      { label: "Compile → DSL", command: "build.compile" },
-      { label: "Deploy to Runtime", command: "build.deploy" },
+      { label: "Validate", command: "build.validate" },
+      { type: "separator" },
+      { label: "Deploy", shortcut: "Ctrl+Enter", command: "build.deploy" },
+      { label: "Undeploy", command: "build.undeploy" },
+      { label: "Delete Deployment…", command: "build.deleteDeployment" },
+      { type: "separator" },
+      { label: "Deployment Status…", command: "build.status" },
+      { label: "Compile to DSL", command: "build.compile" },
     ],
   },
   {
@@ -35,16 +93,23 @@ window.PATRON_MENU = [
       { label: "Output Panel", command: "view.output", type: "checkbox", checked: "outputVisible" },
       { label: "Zoom Control", command: "view.zoom", type: "checkbox", checked: "zoomVisible" },
       { type: "separator" },
-      // One switching option (not a checkbox): only the item matching the
-      // current theme's opposite is visible, so the label flips between the two.
-      { label: "Dark Theme", command: "view.theme", when: "isLight" },
-      { label: "White Theme", command: "view.theme", when: "isDark" },
+      { label: "Fit to Screen", command: "view.fit" },
+      { label: "Reset Zoom", command: "view.resetZoom" },
+      { label: "Zoom In", command: "view.zoomIn" },
+      { label: "Zoom Out", command: "view.zoomOut" },
+      { type: "separator" },
+      // Both themes shown; a checkbox marks the active one.
+      { label: "Dark Theme", command: "theme.dark", type: "checkbox", checked: "isDark" },
+      { label: "White Theme", command: "theme.white", type: "checkbox", checked: "isLight" },
     ],
   },
   {
     label: "Help",
     key: "H",
     items: [
+      { label: "Documentation…", command: "help.docs" },
+      { label: "Keyboard Shortcuts…", command: "help.shortcuts" },
+      { type: "separator" },
       { label: "About Patron", command: "help.about" },
     ],
   },

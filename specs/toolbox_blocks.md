@@ -11,7 +11,7 @@ The complete set of blocks expected in the Patron Toolbox once
 
 | Block | Fires when… | Status | Source / backing | Spec |
 |-------|-------------|--------|------------------|------|
-| **Schedule Trigger** | a Schedule (cron/tz) or channel event fires | Exists (`trigger`) | Agent Scheduler (Schedule + Bindings) | §6, §9.3.1 |
+| **Scheduled Trigger** | a Schedule (cron/tz) or channel event fires | Exists (`trigger`) | Agent Scheduler (Schedule + Bindings) | §6, §9.3.1 |
 | **File Initiator** | a new/changed file appears in a watched folder | **New** | new **folder-watch service** | §8, §9.3.1 |
 | **Web Initiator** | a request hits a configured Web API route | **New** | new **HTTP-ingress service** | §8, §9.3.1 |
 | **Speech-to-Text** | incoming speech is transcribed to text | **New** | an **STT / audio-ingress service** | §8, §9.3.1 |
@@ -37,7 +37,7 @@ agent **loop type** is config on the Agent block, not a separate block — see �
 
 | Block | Role | Status | Spec |
 |-------|------|--------|------|
-| **Transform** | data/protocol transformation between two blocks | Exists | §7.1 |
+| **Data Transform** | data/protocol transformation between two blocks | Exists (`transform`) | §7.1 |
 
 ## 5. Destinations (sinks — in only; Bus / File / Web may also be used **inline** as taps)
 
@@ -45,7 +45,7 @@ agent **loop type** is config on the Agent block, not a separate block — see �
 |-------|------|--------|----------------|------|
 | **WhatsApp** | deliver to a WhatsApp group/contact | Exists | select/bind an existing target | §8 |
 | **Text-to-Speech** | deliver to a TTS target | Exists (`tts`) | per channel | §8 |
-| **Bus** | publish to a stream | Exists | per channel; usable inline (tap) | §7.1, §8 |
+| **Event Bus** | publish to a stream | Exists (`bus`) | per channel; usable inline (tap) | §7.1, §8 |
 | **File Destination** | write the outcome to a file | **New** | usable inline (tap) | §7.1, §8 |
 | **Web Destination** | end/continue by calling an outbound Web API | **New** | usable inline (tap) | §7.1, §8 |
 
@@ -54,7 +54,7 @@ agent **loop type** is config on the Agent block, not a separate block — see �
 **14 block types** in scope: 4 initiators, 2 agent/workflow, 2 behavior (RAG, Guardrail),
 1 transform, 5 destinations. Of these, **7 are new** (File Initiator, Web Initiator, Speech-to-Text,
 RAG, Guardrail, File Destination, Web Destination); the rest already exist as classes in
-`composer/blocks.py` (Schedule Trigger = `trigger`, Text-to-Speech = `tts`).
+`composer/blocks.py` (Scheduled Trigger = `trigger`, Text-to-Speech = `tts`).
 
 ## Removed from the Toolbox (2026-07-02)
 

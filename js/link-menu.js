@@ -5,11 +5,10 @@
  * collapsed thin line inside Patron, so we override showLinkMenu with our own themed,
  * self-rendered menu (it does NOT use LiteGraph.ContextMenu, so it always shows).
  *
- * Clicking the dot at a link's midpoint opens:
- *   - "Insert node ▸" → drills into the agent palette; creates the chosen node at the
- *                       link midpoint and rewires  left → node → right  (this is how a
- *                       Transform/adapter block gets dropped onto a connection).
- *   - "Delete link"   → removes the link.
+ * Clicking the dot at an edge's midpoint opens ONE flat list:
+ *   - a pass-through block (Agent / RAG / Guardrail / Data Transform / Workflow) → dropped at
+ *     the edge midpoint, rewiring  left → block → right;
+ *   - a separator, then "Delete Edge" (last) → removes the connection.
  *
  * Reaches the canvas via window.PatronApp; the node list via window.PatronAgentNodes.
  */
@@ -54,12 +53,12 @@
     return r;
   }
 
-  // The palette node types (agent blocks + destinations), as {type, label}.
+  // Only PASS-THROUGH blocks (in + out) can be inserted mid-edge — that's the "Blocks"
+  // palette group (Agent / RAG / Guardrail / Data Transform / Workflow). Initiators (out-only)
+  // and Destinations (in-only) can't rewire both sides, so they're excluded.
   function paletteItems() {
-    const P = window.PatronAgentNodes, out = [];
-    if (P && P.PALETTE && P.PALETTE.items) out.push.apply(out, P.PALETTE.items);
-    if (P && P.DESTINATIONS && P.DESTINATIONS.items) out.push.apply(out, P.DESTINATIONS.items);
-    return out;
+    const P = window.PatronAgentNodes;
+    return (P && P.PALETTE && P.PALETTE.items) ? P.PALETTE.items.slice() : [];
   }
 
   function place(clientX, clientY) {
@@ -107,33 +106,20 @@
       function showRoot() {
         closeMenu();
         menuEl = makeMenu();
-        menuEl.appendChild(row("Insert node", { caret: "▸", onClick: showInsert }));
+        // One flat list: insertable pass-through blocks, then "Delete Edge" last.
+        const items = paletteItems();
+        if (!items.length) menuEl.appendChild(row("(no blocks)", {}));
+        for (const it of items) {
+          menuEl.appendChild(row(it.label, { onClick: () => { insertNode(it.type); closeMenu(); } }));
+        }
         const sep = document.createElement("div");
         sep.style.cssText = "height:1px;background:var(--panel-border,#d0d7de);margin:4px 2px";
         menuEl.appendChild(sep);
-        menuEl.appendChild(row("Delete link", {
+        menuEl.appendChild(row("Delete Edge", {
           danger: true,
           onClick: () => { graph.removeLink(link.id); canvas.setDirty(true, true); closeMenu();
             if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave(); },
         }));
-        document.body.appendChild(menuEl);
-        place(at.x, at.y);
-        document.addEventListener("pointerdown", onDocDown, true);
-        document.addEventListener("keydown", onKey, true);
-      }
-
-      function showInsert() {
-        closeMenu();
-        menuEl = makeMenu();
-        menuEl.appendChild(row("‹ Back", { onClick: showRoot }));
-        const sep = document.createElement("div");
-        sep.style.cssText = "height:1px;background:var(--panel-border,#d0d7de);margin:4px 2px";
-        menuEl.appendChild(sep);
-        const items = paletteItems();
-        if (!items.length) menuEl.appendChild(row("(no node types)", {}));
-        for (const it of items) {
-          menuEl.appendChild(row(it.label, { onClick: () => { insertNode(it.type); closeMenu(); } }));
-        }
         document.body.appendChild(menuEl);
         place(at.x, at.y);
         document.addEventListener("pointerdown", onDocDown, true);
