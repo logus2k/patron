@@ -20,6 +20,8 @@
       <!-- pull-down menu bar (replaces the old toolbar buttons); rendered by
            MenuBar from the model in js/menu.js, wired to commands in app.js -->
       <div id="menubar"></div>
+      <!-- current open project name (top-right); the Phase-01 Project entity will drive it -->
+      <span id="project-name"></span>
     </header>
 
     <!-- the canvas fills the whole screen; the topbar + Toolbox/Output panels float over it -->
@@ -27,8 +29,6 @@
       <canvas id="graph-canvas" tabindex="1"></canvas>
     </main>
 
-    <!-- BUILD STAMP: bump the text each deploy so you can confirm your tab loaded the new build. -->
-    <div id="patron-build" style="position:fixed;bottom:4px;right:8px;font:11px ui-monospace,monospace;opacity:.5;z-index:99999;pointer-events:none">build&nbsp;07-02·H · dedicated-panels</div>
 
     <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>

@@ -89,7 +89,7 @@
       : { width: 300, height: 360 };
     if (typeof jsPanel !== "undefined") {
       panel = jsPanel.create({
-        headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Properties</span>',
+        headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Properties</span>',
         theme: "none",
         borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
         border: "1px solid var(--panel-border)",
@@ -224,7 +224,7 @@
       : { my: "center", at: "center", offsetX: 0, offsetY: 20 };
     if (typeof jsPanel !== "undefined") {
       mcpPanel = jsPanel.create({
-        headerTitle: '<img src="icons/connectors.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">MCP Tools</span>',
+        headerTitle: '<img src="icons/connectors.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">MCP Tools</span>',
         theme: "none",
         borderRadius: "8px",
         border: "1px solid var(--panel-border)",
@@ -362,7 +362,7 @@
     const d0 = (RESOURCES && RESOURCES[rid]) || null;
     if (mcpPanel && typeof mcpPanel.setHeaderTitle === "function") {
       const icon = d0 && d0.icon ? d0.icon : "icons/connectors.svg";
-      mcpPanel.setHeaderTitle('<img src="' + icon + '" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">' + ((d0 && d0.label) || "Select") + '</span>');
+      mcpPanel.setHeaderTitle('<img src="' + icon + '" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">' + ((d0 && d0.label) || "Select") + '</span>');
     }
     renderMcpPanel(onApply);
     if (mcpPanel && mcpPanel.style) mcpPanel.style.display = "";
@@ -410,7 +410,7 @@
       : { my: "center", at: "center", offsetX: 0, offsetY: 20 };
     if (typeof jsPanel !== "undefined") {
       tplPanel = jsPanel.create({
-        headerTitle: '<img src="icons/chat-bubble-text-square.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Template Studio</span>',
+        headerTitle: '<img src="icons/chat-bubble-text-square.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Template Studio</span>',
         theme: "none",
         borderRadius: "8px",
         border: "1px solid var(--panel-border)",

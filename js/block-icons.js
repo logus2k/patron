@@ -72,7 +72,7 @@
     const img = image(type);
     if (!img || !img._ready) return;
     const s = 18 * ((ic && ic.scale) || 1);
-    ctx.drawImage(img, title_height * 0.5 - s * 0.5, title_height * -0.5 - s * 0.5, s, s);
+    ctx.drawImage(img, title_height * 0.5 - s * 0.5 + 3, title_height * -0.5 - s * 0.5, s, s);
   }
 
   global.PatronIcons = {

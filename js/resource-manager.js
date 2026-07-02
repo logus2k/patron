@@ -33,7 +33,7 @@
   function ensurePanel() {
     if (panel) return;
     panel = jsPanel.create({
-      headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Resource Manager</span>',
+      headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Resource Manager</span>',
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
       panelSize: { width: 720, height: 520 },
       position: { my: "center", at: "center", offsetX: 0, offsetY: 0 },

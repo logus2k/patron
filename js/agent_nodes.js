@@ -20,7 +20,7 @@
   const TYPES = { FLOW: "flow" };
 
   const COLOR = "#8ec9a8";   // Blocks (agent/activity) — pastel green
-  const INIT = "#d79a9a";    // Initiators (boundary sources) — pastel red
+  const INIT = "#f28b7d";    // Initiators (boundary sources) — salmon
   const DEST = "#8fb3d9";    // Destinations — pastel blue
 
   const MIN_W = 180, MAX_W = 560;
@@ -110,6 +110,7 @@
     node.onDrawForeground = function (ctx, canvas) {
       if (prevFg) prevFg.call(this, ctx, canvas);
       if (this.flags && this.flags.collapsed) return;
+      if (this.is_selected) return;   // no accent stripe while the block is selected
       const th = (typeof LiteGraph !== "undefined" && LiteGraph.NODE_TITLE_HEIGHT) || 24;
       const h = (this.size && this.size[1]) || 0;
       const r = this.round_radius || 8;

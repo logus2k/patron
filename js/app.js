@@ -159,6 +159,16 @@
     },
   };
 
+  // Current open-project name shown top-right (persisted as ui.projectName; the Phase-01
+  // Project entity will drive this). Minimal placeholder for now.
+  let projectName = "Untitled Project";
+  function setProjectName(name) {
+    projectName = (name && String(name).trim()) || "Untitled Project";
+    const el = document.getElementById("project-name");
+    if (el) el.textContent = projectName;
+  }
+  global.PatronApp.setProjectName = setProjectName;
+
   // --- palette UI + drag-to-canvas -----------------------------------------
   function buildPalette(root) {
     root = root || document.getElementById("palette");
@@ -249,6 +259,7 @@
       graph.clear();
       for (const k in inspectState) delete inspectState[k];
       graph.configure(g);
+      setProjectName("News Agent");
       graph.setDirtyCanvas(true, true);
       inspectOut.textContent = "News Agent loaded (Trigger → Agent → WhatsApp). Build → Compile → DSL.";
     } catch (e) {
@@ -351,6 +362,7 @@
       version: 1,
       graph: graph.serialize(), // includes every node's pos/size (canvas components)
       ui: {
+        projectName: projectName,
         theme: document.documentElement.dataset.theme,
         view: { offset: lgcanvas.ds.offset.slice(), scale: lgcanvas.ds.scale },
         panels: {
@@ -385,6 +397,7 @@
       graph.configure(g || {});
     }
     const ui = ws.ui || {};
+    setProjectName(ui.projectName);
     if (ui.theme) applyTheme(ui.theme);
     if (window.PatronApp) window.PatronApp.blockRects = ui.blockRects || {}; // per-block panel positions
     if (ui.view) {
@@ -560,6 +573,7 @@
   function clearCanvas() {
     graph.clear();
     for (const k in inspectState) delete inspectState[k];
+    setProjectName("Untitled Project");
     inspectOut.textContent = "Canvas cleared. Drag blocks from the toolbox.";
   }
   function showAbout() {
@@ -660,7 +674,7 @@
   // Colored file icon (icons/*.svg) for a panel header.
   const panelImg = (src, size) =>
     '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) +
-    '" style="vertical-align:middle;margin-right:7px;position:relative;top:-1px" alt="">';
+    '" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
   let toolboxPanel = null;
