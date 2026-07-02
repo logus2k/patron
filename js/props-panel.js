@@ -905,6 +905,13 @@
       resizeit: { stop: function () { saveBlockRect(id, jp); } },
       onclosed: function () { saveBlockRect(id, jp); delete blockPanels[id]; },
     });
+    // Selection linking (block_management.md §3): clicking a block's panel selects its
+    // canvas block, so with several panels open you always know which block each manages.
+    jp.addEventListener("pointerdown", function () {
+      const c = window.PatronApp && window.PatronApp.canvas;
+      const cur = blockPanels[id] && blockPanels[id].node;
+      if (c && c.selectNode && cur) { c.selectNode(cur); c.setDirty(true, true); }
+    }, true);
     blockPanels[id] = { panel: jp, node: node };
   }
 
