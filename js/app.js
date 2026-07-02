@@ -610,6 +610,100 @@
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
 
+  // --- Projects (Phase 01): named compositions via /api/projects ---------------
+  const PROJ_API = "api/projects";
+  let currentProject = { uid: null, name: "Untitled Project", description: "", version: 0 };
+  function setCurrentProject(p) {
+    currentProject = { uid: p.uid, name: p.name, description: p.description || "", version: p.version || 0 };
+    setProjectName(p.name);
+  }
+  function projDoc(overrides) {
+    const ws = collectWorkspace();
+    return Object.assign({
+      uid: currentProject.uid, name: currentProject.name,
+      description: currentProject.description, version: currentProject.version || 0,
+      graph: ws.graph, ui: ws.ui,
+    }, overrides || {});
+  }
+  async function projectSaveAs() {
+    const name = (prompt("Save project as:", currentProject.name || "Untitled Project") || "").trim();
+    if (!name) return;
+    const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(projDoc({ uid: null, name: name, version: 0 })) });
+    const p = await res.json(); setCurrentProject(p);
+    showOutput(); inspectOut.textContent = 'Saved as "' + p.name + '".';
+  }
+  async function projectSave() {
+    if (!currentProject.uid) return projectSaveAs();
+    const res = await fetch(PROJ_API + "/" + currentProject.uid, { method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(projDoc({ version: (currentProject.version || 0) + 1 })) });
+    const p = await res.json(); currentProject.version = p.version;
+    showOutput(); inspectOut.textContent = 'Saved "' + p.name + '" (v' + p.version + ').';
+  }
+  async function projectNew() {
+    clearCanvas();
+    const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Untitled Project", graph: graph.serialize(), ui: {} }) });
+    const p = await res.json(); setCurrentProject(p);
+    inspectOut.textContent = 'New project "' + p.name + '".';
+  }
+  function applyProject(p) {
+    applyWorkspace({ graph: p.graph, ui: p.ui });
+    setCurrentProject(p);
+    graph.setDirtyCanvas(true, true);
+  }
+  let projOpenPanel = null;
+  async function projectOpen() {
+    const list = (((await (await fetch(PROJ_API)).json()) || {}).projects) || [];
+    if (projOpenPanel) { try { projOpenPanel.close(); } catch (e) {} projOpenPanel = null; }
+    const rows = list.length
+      ? list.map(function (p) {
+          return '<div class="proj-row" data-uid="' + p.uid + '" style="padding:7px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:12px">' +
+                 '<span>' + (p.name || "(unnamed)") + '</span><span style="opacity:.5;font-size:11px">v' + (p.version || 0) + '</span></div>';
+        }).join("")
+      : '<div style="padding:10px;opacity:.6">No saved projects yet.</div>';
+    projOpenPanel = jsPanel.create({
+      headerTitle: '<span class="pttxt">Open Project</span>', theme: "none",
+      borderRadius: "8px", border: "1px solid var(--panel-border)",
+      panelSize: { width: 320, height: Math.min(440, 96 + list.length * 38) },
+      position: { my: "center", at: "center" },
+      headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      content: '<div style="padding:6px">' + rows + '</div>',
+      callback: function (panel) {
+        panel.content.querySelectorAll(".proj-row").forEach(function (r) {
+          r.addEventListener("mouseenter", function () { r.style.background = "var(--bg,#f0f3f7)"; });
+          r.addEventListener("mouseleave", function () { r.style.background = "transparent"; });
+          r.addEventListener("click", async function () {
+            const pr = await (await fetch(PROJ_API + "/" + r.getAttribute("data-uid"))).json();
+            applyProject(pr);
+            try { panel.close(); } catch (e) {} projOpenPanel = null;
+          });
+        });
+      },
+    });
+  }
+  async function projectRename() {
+    const name = (prompt("Rename project:", currentProject.name) || "").trim();
+    if (!name) return;
+    currentProject.name = name; setProjectName(name);
+    if (currentProject.uid) await projectSave();
+  }
+  function projectSettings() {
+    const desc = prompt("Project settings\n\nName: " + currentProject.name +
+      "\nUID: " + (currentProject.uid || "(unsaved)") + "\nVersion: " + (currentProject.version || 0) +
+      "\n\nEdit the description:", currentProject.description || "");
+    if (desc === null) return;
+    currentProject.description = desc;
+    if (currentProject.uid) projectSave();
+  }
+  async function projectDelete() {
+    if (!currentProject.uid) { showOutput(); inspectOut.textContent = "This project isn't saved yet."; return; }
+    if (!confirm('Delete project "' + currentProject.name + '"? This cannot be undone.')) return;
+    await fetch(PROJ_API + "/" + currentProject.uid, { method: "DELETE" });
+    projectNew();
+  }
+
   // Insert a block at the current view center (Insert menu / edge menu share the idea).
   function insertBlock(type) {
     const ds = lgcanvas.ds;
@@ -627,9 +721,13 @@
   }
 
   // --- Project ---
-  menuBar.registerCommand("project.new", clearCanvas);
-  menuBar.registerCommand("project.open", loadWorkspace);
-  menuBar.registerCommand("project.save", () => saveWorkspace());
+  menuBar.registerCommand("project.new", projectNew);
+  menuBar.registerCommand("project.open", projectOpen);
+  menuBar.registerCommand("project.save", projectSave);
+  menuBar.registerCommand("project.saveAs", projectSaveAs);
+  menuBar.registerCommand("project.rename", projectRename);
+  menuBar.registerCommand("project.settings", projectSettings);
+  menuBar.registerCommand("project.delete", projectDelete);
   // --- Edit ---
   menuBar.registerCommand("edit.clear", clearCanvas);
   menuBar.registerCommand("edit.delete", () => { if (lgcanvas.deleteSelectedNodes) lgcanvas.deleteSelectedNodes(); lgcanvas.setDirty(true, true); scheduleSave(); });
@@ -657,7 +755,7 @@
   // --- Help ---
   menuBar.registerCommand("help.about", showAbout);
   // --- Planned (stubs — announce, don't crash) ---
-  ["project.saveAs", "project.rename", "project.settings", "project.delete", "project.import", "project.export",
+  ["project.import", "project.export",
    "edit.undo", "edit.redo",
    "build.validate", "build.undeploy", "build.deleteDeployment", "build.status",
    "view.fit", "help.docs", "help.shortcuts"]

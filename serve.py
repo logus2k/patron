@@ -19,9 +19,12 @@ workspaces / per-user storage are a later refactor when there's a concrete need.
 """
 import json
 import os
+import re
 import sys
+import time
 import urllib.error
 import urllib.request
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +32,12 @@ DATA = os.path.join(ROOT, "data")
 WORKSPACE = os.path.join(DATA, "workspace.json")
 API = "/api/workspace"
 DEPLOY_API = "/api/deploy"
+# Phase 01 — named Projects (uid/name/description + composition), file-backed under
+# data/projects/<uid>.json. The single workspace.json above stays as the "current open /
+# autosave" doc; a Project is a NAMED, savable composition (block_management.md §9.1).
+PROJECTS = os.path.join(DATA, "projects")
+PROJECTS_API = "/api/projects"
+_UID_RE = re.compile(r"^[A-Za-z0-9._-]+$")  # project uid must be filesystem-safe
 # Composer contract endpoints — proxied to agent_runtime so the browser (same-origin,
 # gated under /patron) uses the ONE authoritative Block model instead of a JS copy.
 COMPOSER_CATALOG = "/composer/catalog"
@@ -57,6 +66,59 @@ def _http(method, url, body=None):
         return resp.status, (json.loads(raw) if raw else None)
 
 
+# --- Project store (file-backed; data/projects/<uid>.json) -------------------
+def _proj_path(uid):
+    return os.path.join(PROJECTS, uid + ".json")
+
+
+def _proj_list():
+    """Metadata for every saved project (uid/name/description/updated)."""
+    out = []
+    if os.path.isdir(PROJECTS):
+        for fn in sorted(os.listdir(PROJECTS)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(PROJECTS, fn), "r", encoding="utf-8") as f:
+                    p = json.load(f)
+                out.append({"uid": p.get("uid"), "name": p.get("name"),
+                            "description": p.get("description", ""),
+                            "updated": p.get("updated"), "version": p.get("version", 0)})
+            except (json.JSONDecodeError, OSError):
+                continue
+    return out
+
+
+def _proj_read(uid):
+    try:
+        with open(_proj_path(uid), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _proj_write(p):
+    os.makedirs(PROJECTS, exist_ok=True)
+    p["updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    path = _proj_path(p["uid"])
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(p, f, indent=2)
+    os.replace(tmp, path)  # atomic
+    return p
+
+
+def _proj_from_body(uid, body):
+    return {
+        "uid": uid,
+        "name": (body.get("name") or "Untitled Project").strip() or "Untitled Project",
+        "description": body.get("description", ""),
+        "version": int(body.get("version") or 0),
+        "graph": body.get("graph") or {},
+        "ui": body.get("ui") or {},
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=ROOT, **k)
@@ -75,7 +137,41 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json(self):
+        """Parse the request body as JSON, or emit 400 and return None."""
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            return json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+            return None
+
+    # --- Projects (Phase 01) ---
+    def _project_create(self):
+        body = self._read_json()
+        if body is None:
+            return
+        uid = body.get("uid") or uuid.uuid4().hex[:12]
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        return self._json(201, _proj_write(_proj_from_body(uid, body)))
+
+    def _project_put(self, uid):
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        body = self._read_json()
+        if body is None:
+            return
+        return self._json(200, _proj_write(_proj_from_body(uid, body)))
+
     def do_GET(self):
+        p0 = self.path.split("?")[0]
+        if p0 == PROJECTS_API:
+            return self._json(200, {"projects": _proj_list()})
+        if p0.startswith(PROJECTS_API + "/"):
+            proj = _proj_read(p0[len(PROJECTS_API) + 1:])
+            return self._json(200, proj) if proj else self._json(404, {"ok": False, "error": "no such project"})
         if self.path.split("?")[0] == API:
             if os.path.exists(WORKSPACE):
                 try:
@@ -109,6 +205,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def do_PUT(self):
+        p0 = self.path.split("?")[0]
+        if p0.startswith(PROJECTS_API + "/"):
+            return self._project_put(p0[len(PROJECTS_API) + 1:])
         if self.path.split("?")[0] == API:
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n) if n else b"{}"
@@ -145,6 +244,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"ok": False, "error": f"cannot reach {url}: {e.reason}"})
 
     def do_POST(self):
+        if self.path.split("?")[0] == PROJECTS_API:
+            return self._project_create()
         if self.path.split("?")[0] == DEPLOY_API:
             return self._deploy()
         if self.path.split("?")[0] == COMPOSER_COMPILE:
@@ -157,6 +258,16 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(405, "Method Not Allowed")
 
     def do_DELETE(self):
+        p0 = self.path.split("?")[0]
+        if p0.startswith(PROJECTS_API + "/"):
+            uid = p0[len(PROJECTS_API) + 1:]
+            if not _UID_RE.match(uid):
+                return self._json(400, {"ok": False, "error": "invalid uid"})
+            try:
+                os.remove(_proj_path(uid))
+                return self._json(200, {"ok": True})
+            except FileNotFoundError:
+                return self._json(404, {"ok": False, "error": "no such project"})
         # Resource model delete: DELETE /resources/{id}/{key}.
         if self.path.split("?")[0].startswith("/resources/"):
             return self._proxy_delete(f"{RUNTIME_URL}{self.path}")
