@@ -68,6 +68,12 @@
   // frame when panning the diagram); the full-screen surface looks cleaner
   // without it.
   lgcanvas.render_canvas_border = false;
+  // Many-to-many UX: dragging from a CONNECTED input dot should spawn a NEW fan-in wire
+  // (mirror of the output dot, which already fans out), NOT grab the existing wire to
+  // re-target it. With allow_reconnect_links=false, a plain drag starts a fresh
+  // connection from the input; SHIFT+drag still re-targets the existing link (litegraph
+  // keeps the shiftKey path). See litegraph processMouse input-slot handling.
+  lgcanvas.allow_reconnect_links = false;
   // Hide litegraph's bottom-left debug overlay (T/I/N/V/FPS counters) — dev noise here.
   lgcanvas.show_info = false;
   // Kill litegraph's built-in double-click search box (add-node finder) — we don't use it,
