@@ -1089,6 +1089,16 @@
         }
     };
 
+  // ---- LGraphCanvas.prototype.processNodeDblClicked ----
+  // PATRON: double-clicking a node opens ITS OWN panel. Upstream calls showShowNodePanel()
+  // (the black inline title-editor box) + onNodeDblClicked; we replace it entirely so there is
+  // no title-edit box — just the block's panel. Uses litegraph's own node-dblclick detection
+  // (processMouseDown), so it's reliable and not a coordinate hit-test.
+  LGraphCanvas.prototype.processNodeDblClicked = function (n) {
+    if (global.PatronProps && global.PatronProps.setOpen) global.PatronProps.setOpen(true, n);
+    this.setDirty(true);
+  };
+
   // ---- LGraphCanvas.prototype.processContextMenu ----
   LGraphCanvas.prototype.processContextMenu = function(node, event) {
         var that = this;
@@ -1111,6 +1121,9 @@
             slot = node.getSlotInPosition(event.canvasX, event.canvasY);
             LGraphCanvas.active_node = node;
         }
+        // PATRON: no default node context menu (the litegraph junk menu in the middle of a
+        // block). Right-clicking a node body does nothing; slot + canvas menus still work.
+        if (node && !slot) return;
 
         if (slot) {
             //on slot

@@ -61,6 +61,12 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=ROOT, **k)
 
+    def end_headers(self):
+        # Never let the browser (or a proxy) cache the editor's HTML/JS/CSS — a stale build in
+        # the tab is indistinguishable from "your change didn't work". Always serve fresh.
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        super().end_headers()
+
     def _json(self, code, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(code)

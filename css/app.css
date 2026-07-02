@@ -324,6 +324,14 @@ html, body {
 .rm-act:disabled { opacity: .5; cursor: default; }
 .rm-form { flex: 1 1 auto; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
 
+/* Per-block management section (in the block's own double-click panel) */
+.pp-manage { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--panel-border); }
+.pp-manage-h { font-size: 11px; text-transform: uppercase; opacity: .55; margin-bottom: 7px; }
+.pp-manage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pp-manage-status { font-size: 12px; opacity: .7; margin-left: 4px; }
+.pp-manage-status.pp-err { color: #e5534b; opacity: 1; }
+.pp-btn.pp-danger:hover { border-color: #e5534b; color: #e5534b; }
+
 /* ---- inspector panel ---- */
 #inspect-out {
   margin: 0;

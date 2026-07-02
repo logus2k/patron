@@ -774,6 +774,52 @@
       m.textContent = "no editable fields";
       body.appendChild(m);
     }
+    addManagementRow(node); // this block's OWN management verbs (composer model: per-block, not central)
+  }
+
+  // Per-block management: a block that maps to a deployed resource gets its management verbs
+  // right here in its own (double-click) panel — NOT in a central manager. Keyed by a node
+  // property that identifies the deployed resource (e.g. trigger → scheduler job_id == agent_id).
+  const BLOCK_RESOURCE = {
+    trigger: { resource: "trigger", keyProp: "agent_id" },
+  };
+  function addManagementRow(node) {
+    const map = BLOCK_RESOURCE[node.type];
+    if (!map || !RESOURCES) return;
+    const desc = RESOURCES[map.resource];
+    if (!desc) return;
+    const key = node.properties[map.keyProp];
+    if (!key) return;
+    const verbs = (desc.actions || []).slice();
+    if ((desc.capabilities || []).indexOf("delete") >= 0) verbs.push("delete");
+    if (!verbs.length) return;
+
+    const sec = document.createElement("div"); sec.className = "pp-manage";
+    const h = document.createElement("div"); h.className = "pp-manage-h";
+    h.textContent = "Manage " + (desc.label || map.resource).toLowerCase() + " · " + key;
+    sec.appendChild(h);
+    const row = document.createElement("div"); row.className = "pp-manage-row";
+    const status = document.createElement("span"); status.className = "pp-manage-status";
+    for (const v of verbs) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "pp-btn" + (v === "delete" ? " pp-danger" : "");
+      b.textContent = v;
+      b.addEventListener("click", async () => {
+        if (v === "delete" && !window.confirm("Delete " + map.resource + " '" + key + "'?")) return;
+        b.disabled = true; status.className = "pp-manage-status"; status.textContent = "…";
+        const base = "resources/" + encodeURIComponent(map.resource) + "/" + encodeURIComponent(key);
+        const url = v === "delete" ? base : base + "/" + encodeURIComponent(v);
+        const res = await fetch(url, { method: v === "delete" ? "DELETE" : "POST" })
+          .then((r) => r.json()).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+        if (res && res.ok) { status.textContent = v + " ✓"; }
+        else { status.className = "pp-manage-status pp-err"; status.textContent = v + " failed: " + ((res && res.error) || "error"); }
+        b.disabled = false;
+      });
+      row.appendChild(b);
+    }
+    row.appendChild(status);
+    sec.appendChild(row);
+    body.appendChild(sec);
   }
 
   function selectedNode() {
@@ -787,10 +833,26 @@
     ensurePanel();
     open = v;
     panel.style.display = v ? "" : "none";
-    if (v) populate(node || lastNode || selectedNode());
+    if (v) {
+      populate(node || lastNode || selectedNode());
+      ensureOnScreen();          // a stale saved position must never hide the panel
+      if (panel.front) panel.front();
+    }
     const mb = window.PatronApp && window.PatronApp.menuBar;
     if (mb) { mb.setContext("propsVisible", v); if (mb.refresh) mb.refresh(); }
     if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
+  }
+
+  // Guarantee the panel is within the viewport — if a persisted rect put it off-screen, a
+  // double-click would "do nothing" (panel opens where you can't see it). Snap it back.
+  function ensureOnScreen() {
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const W = window.innerWidth, H = window.innerHeight;
+    if (r.left < 0 || r.top < 40 || r.left > W - 60 || r.top > H - 60 || r.width < 40 || r.height < 40) {
+      panel.style.left = Math.max(40, W - 360) + "px";
+      panel.style.top = "72px";
+    }
   }
   function toggle() { setOpen(!open); }
 

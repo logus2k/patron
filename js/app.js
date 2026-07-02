@@ -86,6 +86,10 @@
   lgcanvas.render_canvas_border = false;
   // Hide litegraph's bottom-left debug overlay (T/I/N/V/FPS counters) — dev noise here.
   lgcanvas.show_info = false;
+  // Kill litegraph's built-in double-click search box (add-node finder) — we don't use it,
+  // and it hijacks double-click. Double-click is reserved for opening a block's own panel.
+  lgcanvas.allow_searchbox = false;
+  lgcanvas.showSearchBox = function () { return false; };
   // Thinner connection links (litegraph default 3 → 2).
   lgcanvas.connections_width = 2;
 

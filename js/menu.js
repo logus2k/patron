@@ -14,7 +14,6 @@ window.PATRON_MENU = [
       { label: "New / Clear Canvas", command: "file.clear" },
       { type: "separator" },
       { label: "Load News Agent", command: "file.news" },
-      { label: "Load GoF Demo", command: "file.demo" },
       { type: "separator" },
       { label: "Save Workspace", shortcut: "Ctrl+S", command: "file.save" },
       { label: "Load Workspace", command: "file.load" },
@@ -24,17 +23,8 @@ window.PATRON_MENU = [
     label: "Build",
     key: "B",
     items: [
-      { label: "Run Demo Pass", command: "build.run" },
-      { type: "separator" },
       { label: "Compile → DSL", command: "build.compile" },
       { label: "Deploy to Runtime", command: "build.deploy" },
-    ],
-  },
-  {
-    label: "Manage",
-    key: "M",
-    items: [
-      { label: "Resource Manager…", command: "view.resources" },
     ],
   },
   {
