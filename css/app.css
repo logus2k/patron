@@ -163,7 +163,7 @@ html, body {
 .jsPanel-controlbar .jsPanel-btn.jsPanel-btn-xs span:not(.material-icons),
 .jsPanel-controlbar .jsPanel-btn.jsPanel-btn-xs svg:not(.svg-inline--fa) { width: 1rem; height: 1rem; margin: 0px; }
 /* Panel title TEXT comes down ~4px (the icon + close button stay put). */
-.jsPanel-title .pttxt { position: relative; top: 2px; }
+.jsPanel-title .pttxt { position: relative; /* top: 2px; */ }
 .jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); border-top-left-radius: 8px; border-top-right-radius: 8px; height: 30px; }
 /* the active (last-clicked / fronted) panel gets a light pastel blue title bar — set via
    js/panel-active.js. !important because jsPanel writes the header background INLINE

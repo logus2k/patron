@@ -418,6 +418,7 @@
           mcp: window.PatronProps && window.PatronProps.mcpRect ? window.PatronProps.mcpRect() : null,
           tpl: window.PatronProps && window.PatronProps.tplRect ? window.PatronProps.tplRect() : null,
         },
+        blockRects: window.PatronApp.blockRects || {}, // per-block dedicated-panel positions
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
         zoomVisible: zoomCtl.style.display !== "none",
       },
@@ -443,6 +444,7 @@
     }
     const ui = ws.ui || {};
     if (ui.theme) applyTheme(ui.theme);
+    if (window.PatronApp) window.PatronApp.blockRects = ui.blockRects || {}; // per-block panel positions
     if (ui.view) {
       if (Array.isArray(ui.view.offset)) lgcanvas.ds.offset = ui.view.offset.slice();
       if (ui.view.scale) lgcanvas.ds.scale = ui.view.scale;

@@ -13,9 +13,9 @@
   "use strict";
   if (typeof LGraphCanvas === "undefined") return;
 
-  function editInPanel(node) {
-    if (window.PatronProps && node) window.PatronProps.setOpen(true, node);
-  }
+  // NOTE: single-click no longer opens any panel. Editing happens in the block's own panel,
+  // opened by DOUBLE-clicking the block (see props-panel.js). Clicking a widget here only
+  // selects the node and blocks litegraph's in-place value editing.
 
   LGraphCanvas.prototype.processNodeWidgets = function (node, pos, event, active_widget) {
     if (!node.widgets || !node.widgets.length ||
@@ -34,21 +34,16 @@
       if (x < 6 || x > ww - 12 || w.last_y === undefined || y < w.last_y || y > w.last_y + wh) {
         continue;
       }
-      // A widget is under the pointer. Route to the panel; NEVER change the value here.
+      // A widget is under the pointer. Only select the node; NEVER edit in place (and no
+      // panel on single click — editing is via double-click on the block).
       if (event.type === downType) {
         if (this.selectNode) this.selectNode(node);
-        editInPanel(node);
       }
       return w; // consume the interaction so litegraph doesn't edit or drag from the widget
     }
     return null;
   };
 
-  // Safety net: any stray call to the inline value prompt also goes to the panel.
-  LGraphCanvas.prototype.prompt = function (title, value, callback, event) {
-    const gc = LGraphCanvas.active_canvas || this;
-    const nw = gc.node_widget;
-    editInPanel((nw && nw[0]) || gc.node_over || gc.current_node || null);
-    return null;
-  };
+  // Safety net: kill litegraph's inline value prompt entirely (no in-place editing).
+  LGraphCanvas.prototype.prompt = function () { return null; };
 })();

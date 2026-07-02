@@ -33,7 +33,6 @@ window.PATRON_MENU = [
     items: [
       { label: "Toolbox", command: "view.toolbox", type: "checkbox", checked: "toolboxVisible" },
       { label: "Output Panel", command: "view.output", type: "checkbox", checked: "outputVisible" },
-      { label: "Properties Panel", command: "view.properties", type: "checkbox", checked: "propsVisible" },
       { label: "Zoom Control", command: "view.zoom", type: "checkbox", checked: "zoomVisible" },
       { type: "separator" },
       // One switching option (not a checkbox): only the item matching the

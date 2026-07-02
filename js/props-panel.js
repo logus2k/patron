@@ -26,7 +26,7 @@
         if (!cat || !cat.blocks) return;
         CATALOG = {};
         for (const b of cat.blocks) CATALOG[b.type] = b.config || [];
-        if (open) populate(lastNode); // re-render with proper controls now
+        if (open) populate(lastNode); rerenderOpenPanels();
       })
       .catch(() => { /* offline — keep the widget fallback */ });
   }
@@ -45,7 +45,7 @@
         if (d && Array.isArray(d.resources)) {
           RESOURCES = {};
           for (const r of d.resources) RESOURCES[r.id] = r;
-          if (open) populate(lastNode);
+          if (open) populate(lastNode); rerenderOpenPanels();
         }
       })
       .catch(() => { /* runtime unreachable — resource-ref fields fall back to text entry */ });
@@ -58,7 +58,7 @@
       .then((d) => {
         if (d && Array.isArray(d.items)) {
           RESOURCE_ITEMS[id] = d.items;
-          if (open) populate(lastNode);
+          if (open) populate(lastNode); rerenderOpenPanels();
           // if the multi-select picker is open on this resource, refresh it now that items arrived
           if (mcpPanel && mcpCtx && mcpCtx.rid === id) renderMcpPanel(mcpCtx.onApply);
         }
@@ -104,6 +104,9 @@
             "font:13px 'Roboto',system-ui,-apple-system,sans-serif";
           body = p.content;
         },
+        // Closing DESTROYS the jsPanel DOM node — drop our refs so ensurePanel() recreates it
+        // on the next double-click (otherwise setOpen would act on a detached element = dead).
+        onclosed: () => { panel = null; body = null; open = false; },
       });
       panel.style.display = "none";
     } else {
@@ -748,10 +751,15 @@
   function populate(node) {
     lastNode = node || lastNode;
     ensurePanel();
+    // This is the block's OWN panel (opened by double-clicking the block) — title it by the
+    // block, not "Properties" (there is no generic Properties panel anymore).
+    if (panel && panel.setHeaderTitle) {
+      panel.setHeaderTitle('<span class="pttxt">' + (node ? (node.title || node.type) : "Block") + '</span>');
+    }
     body.innerHTML = "";
     const h = document.createElement("div");
     h.className = "pp-title";
-    h.textContent = node ? (node.title || node.type) : "Properties";
+    h.textContent = node ? (node.title || node.type) : "Block";
     body.appendChild(h);
     if (!node) {
       const m = document.createElement("div");
@@ -783,7 +791,8 @@
   const BLOCK_RESOURCE = {
     trigger: { resource: "trigger", keyProp: "agent_id" },
   };
-  function addManagementRow(node) {
+  function addManagementRow(node, container) {
+    container = container || body;
     const map = BLOCK_RESOURCE[node.type];
     if (!map || !RESOURCES) return;
     const desc = RESOURCES[map.resource];
@@ -819,7 +828,92 @@
     }
     row.appendChild(status);
     sec.appendChild(row);
-    body.appendChild(sec);
+    container.appendChild(sec);
+  }
+
+  // ===== DEDICATED per-block panels: one separate panel INSTANCE per node, keyed by node id.
+  // Double-clicking a block opens (or fronts) its own panel; multiple can be open at once, each
+  // remembering its own position/size in the workspace. =====
+  const blockPanels = {}; // nodeId -> { panel, node }
+
+  function blockRectStore() {
+    const a = window.PatronApp || {};
+    return (a.blockRects = a.blockRects || {});
+  }
+  function saveBlockRect(id, jp) {
+    if (!jp) return;
+    const cs = getComputedStyle(jp);
+    blockRectStore()[id] = {
+      left: jp.style.left || cs.left, top: jp.style.top || cs.top,
+      width: jp.style.width || cs.width, height: jp.style.height || cs.height,
+    };
+    if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
+  }
+
+  // Render a block's fields + management into a given container (works for any panel instance).
+  function renderBlockInto(container, node) {
+    container.innerHTML = "";
+    const h = document.createElement("div");
+    h.className = "pp-title";
+    h.textContent = node.title || node.type;
+    container.appendChild(h);
+    const fields = CATALOG && CATALOG[node.type];
+    if (fields && fields.length) {
+      preresolveRefs(node, fields);
+      for (const f of fields) container.appendChild(fieldForSchema(node, f));
+    } else if (node.widgets && node.widgets.length) {
+      for (const w of node.widgets) container.appendChild(fieldFor(node, w));
+    } else {
+      const m = document.createElement("div");
+      m.className = "pp-empty"; m.textContent = "no editable fields";
+      container.appendChild(m);
+    }
+    addManagementRow(node, container);
+  }
+
+  function openBlockPanel(node) {
+    if (!node || typeof jsPanel === "undefined") return;
+    const id = String(node.id);
+    const existing = blockPanels[id];
+    if (existing && existing.panel) {                 // already open → front + refresh, no duplicate
+      existing.node = node;
+      existing.panel.style.display = "";
+      if (existing.panel.front) existing.panel.front();
+      if (existing.panel.content) renderBlockInto(existing.panel.content, node);
+      return;
+    }
+    const r = blockRectStore()[id];
+    const px = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, "")); return isFinite(n) ? n : 0; };
+    const cascade = Object.keys(blockPanels).length;  // offset new panels so they don't stack exactly
+    const position = (r && r.left && r.top)
+      ? { my: "left-top", at: "left-top", offsetX: px(r.left), offsetY: px(r.top) }
+      : { my: "left-top", at: "left-top", offsetX: 340 + cascade * 26, offsetY: 92 + cascade * 26 };
+    const panelSize = (r && r.width && r.height)
+      ? { width: px(r.width) || 320, height: px(r.height) || 380 }
+      : { width: 320, height: 380 };
+    const jp = jsPanel.create({
+      headerTitle: '<span class="pttxt">' + (node.title || node.type) + '</span>',
+      theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
+      panelSize: panelSize, position: position, boxShadow: 3,
+      headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
+      callback: (p) => {
+        p.content.style.cssText =
+          "padding:12px;overflow:auto;background:var(--panel);color:var(--text);font:13px 'Roboto',system-ui,sans-serif";
+        renderBlockInto(p.content, node);
+      },
+      dragit: { stop: function () { saveBlockRect(id, jp); } },
+      resizeit: { stop: function () { saveBlockRect(id, jp); } },
+      onclosed: function () { saveBlockRect(id, jp); delete blockPanels[id]; },
+    });
+    blockPanels[id] = { panel: jp, node: node };
+  }
+
+  // Re-render every open block panel (e.g. after the catalog / resource lists load).
+  function rerenderOpenPanels() {
+    for (const id in blockPanels) {
+      const e = blockPanels[id];
+      if (e && e.panel && e.panel.content) renderBlockInto(e.panel.content, e.node);
+    }
   }
 
   function selectedNode() {
@@ -857,6 +951,7 @@
   function toggle() { setOpen(!open); }
 
   window.PatronProps = { toggle, setOpen, isOpen: () => open, populate, panel: () => panel,
+                         openBlock: openBlockPanel,   // double-click → this block's dedicated panel
                          mcpPanel: () => mcpPanel, mcpRect: mcpRectNow,
                          tplPanel: () => tplPanel, tplRect: tplRectNow };
 
@@ -869,26 +964,37 @@
       app.menuBar.setContext("propsVisible", false);
       if (app.menuBar.refresh) app.menuBar.refresh();
     }
-    // Double-click a node -> open the panel on it.
+    // Double-click a node -> open ITS dedicated panel.
     const prevDbl = canvas.onNodeDblClicked;
     canvas.onNodeDblClicked = function (node) {
       if (prevDbl) prevDbl.call(this, node);
-      setOpen(true, node);
+      openBlockPanel(node);
     };
-    // Single-select only updates the panel when it's already open (never opens it).
-    const prevSel = canvas.onNodeSelected;
-    canvas.onNodeSelected = function (node) {
-      if (prevSel) prevSel.call(this, node);
-      if (open) populate(node);
-    };
+    // litegraph only fires processNodeDblClicked when the node is ALREADY selected
+    // (litegraph.js: `is_double_click && this.selected_nodes[node.id]`), so a first double-click
+    // on an unselected node does nothing. Bind a raw DOM dblclick on the canvas that hit-tests
+    // the node under the cursor and opens its panel regardless of selection state. Reliable.
+    const cv = canvas.canvas || document.getElementById("graph-canvas");
+    if (cv && !cv._patronDbl) {
+      cv._patronDbl = true;
+      cv.addEventListener("dblclick", function (e) {
+        try {
+          const g = window.PatronApp.graph;
+          const pos = canvas.convertEventToCanvasOffset(e);
+          const node = g.getNodeOnPos(pos[0], pos[1], canvas.visible_nodes);
+          if (node) {
+            e.preventDefault(); e.stopPropagation();
+            if (canvas.selectNode) canvas.selectNode(node);
+            openBlockPanel(node);
+          }
+        } catch (err) { /* never let a hit-test error break the editor */ }
+      }, true);
+    }
     // Visibility/position restore is driven by app.js applyWorkspace (it has the workspace
     // data and calls PatronProps.restore() after the async load) — see PatronProps.restore.
   });
 
-  // Called by app.js applyWorkspace once PatronApp.propsRect is set. Opens the panel if it
-  // was visible when saved (it then positions itself from the saved rect via ensurePanel).
-  window.PatronProps.restore = function () {
-    const r = savedRect();
-    if (r && r.hidden === false) setOpen(true);
-  };
+  // The block panel opens ONLY on double-click — never auto-opened on startup (that produced a
+  // stray empty "Block" panel). No-op kept so app.js applyWorkspace can still call it safely.
+  window.PatronProps.restore = function () { /* intentionally does nothing */ };
 })();

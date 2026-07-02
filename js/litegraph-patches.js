@@ -1095,7 +1095,7 @@
   // no title-edit box — just the block's panel. Uses litegraph's own node-dblclick detection
   // (processMouseDown), so it's reliable and not a coordinate hit-test.
   LGraphCanvas.prototype.processNodeDblClicked = function (n) {
-    if (global.PatronProps && global.PatronProps.setOpen) global.PatronProps.setOpen(true, n);
+    if (global.PatronProps && global.PatronProps.openBlock) global.PatronProps.openBlock(n);
     this.setDirty(true);
   };
 
