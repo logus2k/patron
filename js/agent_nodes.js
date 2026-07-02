@@ -258,7 +258,28 @@
       this.addProperty("input_vars", "{}");
       this.addProperty("tools_allow", "");
       this.addProperty("tools_max_rounds", 3);
+      // Skills (block_management.md §8.3): a multi-select from Agent Runtime's skill
+      // registry, rendered by the Properties panel's generic resource-ref checklist
+      // (kind "skill", bound to /resources/skill) — exactly like tools_allow. The
+      // optional context conditions drive which priority-1 skills auto-inject.
+      this.addProperty("skills_allow", "");
+      this.addProperty("skills_context", "");
       this.addProperty("memory", "none");
+      // Loop (block_management.md §8.4): the OUTER repeat loop around the whole agent
+      // action — distinct from tools_max_rounds (the Brain's INNER tool loop). Types are
+      // SEPARATE: off / counter / expression / judge. Per-type fields below are rendered by
+      // the Properties panel from the /composer/catalog metadata (loop section).
+      this.addProperty("loop_type", "off");
+      this.addProperty("loop_n", 1);
+      this.addProperty("loop_expression", "");
+      this.addProperty("loop_max_iter", 10);
+      this.addProperty("loop_iteration_input", "same");
+      // judge sub-config (only for loop type "judge"):
+      this.addProperty("loop_judge_persona", "");
+      this.addProperty("loop_verdict_read", "expression");
+      this.addProperty("loop_verdict_expression", "");
+      this.addProperty("loop_verdict_field", "");
+      this.addProperty("loop_judge_template", "");
       // Agent-level metadata + optional capabilities: stored as properties (so they
       // serialize + lower), edited in the Properties panel (which renders every field
       // from the block catalog). Only the key fields get a canvas widget below.
