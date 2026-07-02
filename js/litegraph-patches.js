@@ -1262,4 +1262,226 @@
             //	return v.callback.call(that, node, options, e, menu, that, event );
         }
     };
+
+  // ==========================================================================
+  // PATRON: many-to-many connections (input FAN-IN).
+  //
+  // Upstream litegraph already lets one OUTPUT feed MANY inputs (output.links is
+  // an array). But each INPUT holds ONE link (input.link is a scalar) — dragging
+  // a 2nd wire onto an input disconnects the 1st. Patron needs the mirror image:
+  // MANY outputs -> ONE input (fan-in), to match the runtime's per-message fan-in.
+  //
+  // We add input.links[] (symmetric to output.links[]) and override the handful of
+  // methods that assumed one-link-per-input:
+  //   connect          - wrap upstream: hide the scalar so it won't disconnect the
+  //                      existing wire, then append the new link to input.links[]
+  //   disconnectInput  - remove a SPECIFIC link (or all) from input.links[]
+  //   removeLink       - pass the specific link id through (was: by slot => nuked all)
+  //   drawConnections  - wrap upstream, then render the EXTRA fan-in links it skipped
+  //   configure        - rebuild input.links[] from graph.links after a load
+  //
+  // input.link (scalar) is kept = the LAST link so all the vanilla readers that
+  // still use it (getInputData, slot pickup on drag, link highlighting) keep working.
+  // Every fan-in link lives in graph.links, so LGraph.serialize already persists them
+  // on Save; we only need to rebuild the per-input arrays on load. A slot can opt OUT
+  // of fan-in with input.multi === false (falls back to vanilla single-link behavior).
+  // ==========================================================================
+  var LGraph = global.LGraph;
+  if (LGraph && LGraphNode && LGraphCanvas) {
+    var _tmpOut = new Float32Array(2);
+    var _tmpIn = new Float32Array(2);
+
+    function inputIsMulti(input) { return !!input && input.multi !== false; }
+
+    // ---- LGraphNode.prototype.connect (wrap) ----
+    var _origConnect = LGraphNode.prototype.connect;
+    LGraphNode.prototype.connect = function (slot, target_node, target_slot) {
+      // Resolve just enough to find the target INPUT (upstream re-resolves everything).
+      var t_node = target_node;
+      if (t_node && t_node.constructor === Number) {
+        t_node = this.graph ? this.graph.getNodeById(t_node) : null;
+      }
+      var t_slot = target_slot == null ? 0 : target_slot;
+      var input = null;
+      if (t_node && t_node.inputs) {
+        if (t_slot != null && t_slot.constructor === String) {
+          var idx = t_node.findInputSlot(t_slot);
+          if (idx !== -1) { input = t_node.inputs[idx]; }
+        } else if (typeof t_slot === "number") {
+          input = t_node.inputs[t_slot];
+        }
+      }
+      var multi = inputIsMulti(input);
+
+      // Dedupe: skip if this exact origin-slot -> target-slot edge already exists.
+      if (multi && this.graph && input.links && input.links.length) {
+        var oslot = (typeof slot === "number") ? slot : this.findOutputSlot(slot);
+        for (var e = 0; e < input.links.length; e++) {
+          var l = this.graph.links[input.links[e]];
+          if (l && l.origin_id === this.id && l.origin_slot === oslot) { return l; }
+        }
+      }
+
+      // Hide the existing scalar so upstream connect() won't disconnect the old wire.
+      var savedScalar = null, hid = false;
+      if (multi && input && input.link != null) { savedScalar = input.link; input.link = null; hid = true; }
+
+      var link_info = _origConnect.call(this, slot, target_node, target_slot);
+
+      if (multi && input) {
+        if (link_info) {
+          if (input.links == null) { input.links = []; }
+          if (input.links.indexOf(link_info.id) === -1) { input.links.push(link_info.id); }
+          // upstream already set input.link = link_info.id (scalar = last)
+        } else if (hid) {
+          input.link = savedScalar; // connection was rejected — restore what we hid
+        }
+      }
+      return link_info;
+    };
+
+    // Remove a single input link everywhere (graph pool, origin output.links, arrays)
+    // and fire the same callbacks upstream disconnectInput does — for ONE link.
+    function removeOneInputLink(node, slot, link_id) {
+      var input = node.inputs[slot];
+      var graph = node.graph;
+      if (!input || !graph || link_id == null) { return false; }
+      var link_info = graph.links[link_id];
+      if (link_info) {
+        var origin = graph.getNodeById(link_info.origin_id);
+        if (origin) {
+          var output = origin.outputs[link_info.origin_slot];
+          if (output && output.links && output.links.length) {
+            var oi = output.links.indexOf(link_id);
+            if (oi !== -1) { output.links.splice(oi, 1); }
+          }
+          if (origin.onConnectionsChange) {
+            origin.onConnectionsChange(LiteGraph.OUTPUT, link_info.origin_slot, false, link_info, output);
+          }
+          if (graph.onNodeConnectionChange) {
+            graph.onNodeConnectionChange(LiteGraph.OUTPUT, origin, link_info.origin_slot);
+          }
+        }
+        delete graph.links[link_id];
+        graph._version++;
+      }
+      if (input.links && input.links.length) {
+        var j = input.links.indexOf(link_id);
+        if (j !== -1) { input.links.splice(j, 1); }
+      }
+      if (input.link === link_id) {
+        input.link = (input.links && input.links.length) ? input.links[input.links.length - 1] : null;
+      }
+      if (node.onConnectionsChange) { node.onConnectionsChange(LiteGraph.INPUT, slot, false, link_info, input); }
+      if (graph.onNodeConnectionChange) { graph.onNodeConnectionChange(LiteGraph.INPUT, node, slot); }
+      return true;
+    }
+
+    // ---- LGraphNode.prototype.disconnectInput (override) ----
+    // disconnectInput(slot)          -> remove ALL links on that input (node delete, clear)
+    // disconnectInput(slot, link_id) -> remove only that one link (fan-in edge delete)
+    LGraphNode.prototype.disconnectInput = function (slot, target) {
+      if (slot.constructor === String) {
+        slot = this.findInputSlot(slot);
+        if (slot === -1) { if (LiteGraph.debug) { console.log("Connect: Error, no slot of name " + slot); } return false; }
+      } else if (!this.inputs || slot >= this.inputs.length) {
+        if (LiteGraph.debug) { console.log("Connect: Error, slot number not found"); }
+        return false;
+      }
+      var input = this.inputs[slot];
+      if (!input) { return false; }
+
+      var ids;
+      if (typeof target === "number") { ids = [target]; }
+      else if (input.links && input.links.length) { ids = input.links.slice(); }
+      else if (input.link != null) { ids = [input.link]; }
+      else { this.setDirtyCanvas(false, true); return false; }
+
+      for (var i = 0; i < ids.length; i++) { removeOneInputLink(this, slot, ids[i]); }
+      this.setDirtyCanvas(false, true);
+      if (this.graph) { this.graph.connectionChange(this); }
+      return true;
+    };
+
+    // ---- LGraph.prototype.removeLink (override) ----
+    // Target the SPECIFIC link so deleting one fan-in edge keeps the siblings.
+    LGraph.prototype.removeLink = function (link_id) {
+      var link = this.links[link_id];
+      if (!link) { return; }
+      var node = this.getNodeById(link.target_id);
+      if (node) { node.disconnectInput(link.target_slot, link_id); }
+    };
+
+    // ---- LGraphCanvas.prototype.drawConnections (wrap + post-pass) ----
+    // Upstream draws ONE link per input (input.link). We let it run, then draw every
+    // ADDITIONAL fan-in link it skipped. (Upstream's own body uses IIFE-local temp
+    // vectors we can't reach, so we render the extras with our own — full faithfulness
+    // for the primary link, plain curves for the rest via the same renderLink().)
+    var _origDrawConnections = LGraphCanvas.prototype.drawConnections;
+    LGraphCanvas.prototype.drawConnections = function (ctx) {
+      _origDrawConnections.call(this, ctx);
+      var graph = this.graph;
+      if (!graph || !graph._nodes) { return; }
+      ctx.lineWidth = this.connections_width;
+      ctx.fillStyle = "#AAA";
+      ctx.strokeStyle = "#AAA";
+      ctx.globalAlpha = this.editor_alpha;
+      var nodes = graph._nodes;
+      for (var n = 0; n < nodes.length; n++) {
+        var node = nodes[n];
+        if (!node.inputs) { continue; }
+        for (var i = 0; i < node.inputs.length; i++) {
+          var input = node.inputs[i];
+          if (!input || !input.links || input.links.length < 2) { continue; }
+          var end_pos = node.getConnectionPos(true, i, _tmpIn);
+          var end_dir = input.dir || (node.horizontal ? LiteGraph.UP : LiteGraph.LEFT);
+          for (var k = 0; k < input.links.length; k++) {
+            var link_id = input.links[k];
+            if (link_id === input.link) { continue; } // primary already drawn upstream
+            var link = graph.links[link_id];
+            if (!link) { continue; }
+            var start_node = graph.getNodeById(link.origin_id);
+            if (!start_node) { continue; }
+            var out_slot = start_node.outputs && start_node.outputs[link.origin_slot];
+            var start_pos = start_node.getConnectionPos(false, link.origin_slot, _tmpOut);
+            var start_dir = (out_slot && out_slot.dir) || (start_node.horizontal ? LiteGraph.DOWN : LiteGraph.RIGHT);
+            this.renderLink(ctx, start_pos, end_pos, link, false, 0, null, start_dir, end_dir);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // Rebuild input.links[] from the authoritative link pool (graph.links) after a load;
+    // upstream configure only restores the scalar input.link.
+    function rebuildMultiInputs(graph) {
+      if (!graph || !graph._nodes) { return; }
+      for (var n = 0; n < graph._nodes.length; n++) {
+        var inputs = graph._nodes[n].inputs;
+        if (!inputs) { continue; }
+        for (var i = 0; i < inputs.length; i++) { if (inputIsMulti(inputs[i])) { inputs[i].links = []; } }
+      }
+      var ids = Object.keys(graph.links).map(Number).sort(function (a, b) { return a - b; });
+      for (var x = 0; x < ids.length; x++) {
+        var link = graph.links[ids[x]];
+        if (!link) { continue; }
+        var tnode = graph.getNodeById(link.target_id);
+        if (!tnode || !tnode.inputs) { continue; }
+        var input = tnode.inputs[link.target_slot];
+        if (!input) { continue; }
+        if (inputIsMulti(input)) { if (!input.links) { input.links = []; } input.links.push(link.id); }
+        input.link = link.id; // scalar = last
+      }
+    }
+
+    // ---- LGraph.prototype.configure (wrap) ----
+    var _origConfigure = LGraph.prototype.configure;
+    LGraph.prototype.configure = function (data, keep_old) {
+      var r = _origConfigure.call(this, data, keep_old);
+      rebuildMultiInputs(this);
+      return r;
+    };
+  } else {
+    console.error("litegraph-patches: many-to-many patch skipped (LGraph/LGraphNode/LGraphCanvas missing)");
+  }
 })(window);
