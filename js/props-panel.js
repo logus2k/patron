@@ -768,6 +768,7 @@
       body.appendChild(m);
       return;
     }
+    if (node.type === "trigger") { renderScheduleInto(body, node); return; }
     // Prefer the block's own catalog metadata (control per field); fall back to the node's
     // widgets if the catalog isn't loaded / has no entry for this type.
     const fields = CATALOG && CATALOG[node.type];
@@ -853,8 +854,217 @@
     if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
   }
 
+  // ===== Scheduled Trigger: a DEDICATED, purpose-built scheduler UI (not the generic
+  // label→value rows). Opens on double-click like any block panel, but renders a mode
+  // selector (Cron / Interval / One-off) + the right fields + a live human-readable
+  // preview. Writes straight to the node properties the deploy path reads. =====
+  const CRON_PRESETS = [
+    { label: "Every day at 07:00", cron: "0 7 * * *" },
+    { label: "Every hour (on the hour)", cron: "0 * * * *" },
+    { label: "Every 15 minutes", cron: "*/15 * * * *" },
+    { label: "Weekdays at 08:00", cron: "0 8 * * 1-5" },
+    { label: "Every Monday at 09:00", cron: "0 9 * * 1" },
+    { label: "First of the month at 00:00", cron: "0 0 1 * *" },
+  ];
+  const CRON_FIELDS = [["minute"], ["hour"], ["day"], ["month"], ["weekday"]];
+  const TZ_COMMON = ["UTC", "Europe/Lisbon", "Europe/London", "Europe/Madrid",
+                     "America/New_York", "America/Los_Angeles", "Asia/Tokyo"];
+  const IVL_UNITS = ["seconds", "minutes", "hours", "days", "weeks"];
+
+  // Best-effort human-readable cron. Falls back to the raw expression for shapes it can't
+  // phrase, so it never misdescribes a schedule.
+  function cronText(expr) {
+    const parts = String(expr || "").trim().split(/\s+/);
+    if (parts.length !== 5) return expr ? "cron: " + expr : "(incomplete)";
+    const [mi, h, dom, mon, dow] = parts;
+    const p2 = (n) => (String(n).length < 2 ? "0" + n : "" + n);
+    const num = (s) => /^\d+$/.test(s);
+    const DOW = { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday",
+                  "4": "Thursday", "5": "Friday", "6": "Saturday", "7": "Sunday" };
+    const time = (num(mi) && num(h)) ? p2(h) + ":" + p2(mi) : null;
+    if (mi === "*") return "every minute";
+    if (h === "*" && num(mi)) return "hourly at :" + p2(mi);
+    if (/^\*\/\d+$/.test(mi) && h === "*") return "every " + mi.slice(2) + " minutes";
+    if (dom === "*" && mon === "*") {
+      if (dow === "*") return time ? "every day at " + time : "daily";
+      if (dow === "1-5") return "weekdays at " + (time || "?");
+      if (DOW[dow]) return "every " + DOW[dow] + " at " + (time || "?");
+    }
+    if (num(dom) && mon === "*" && dow === "*") return "day " + dom + " monthly at " + (time || "?");
+    return "cron: " + expr;
+  }
+
+  // Keep the canvas node's one-line summary + width in sync after a schedule edit.
+  function refreshTriggerNode(node) {
+    node.properties.schedule_summary = window.PatronScheduleSummary
+      ? window.PatronScheduleSummary(node.properties) : "";
+    const w = (node.widgets || []).find((x) => x.name === "schedule_summary");
+    if (w) w.value = node.properties.schedule_summary;
+    if (typeof window.PatronFitNodeWidth === "function") window.PatronFitNodeWidth(node);
+    const c = window.PatronApp && window.PatronApp.canvas;
+    if (c && c.setDirty) c.setDirty(true, true);
+  }
+  function commitSchedule(node, key, val) {
+    commitValue(node, key, val);   // property + autosave + node refit
+    refreshTriggerNode(node);       // one-line summary widget
+  }
+
+  // A labelled field (reuses the pp-* look). Returns { wrap, input }.
+  function schField(labelText, control, value, onCommit, opts) {
+    opts = opts || {};
+    const wrap = document.createElement("label");
+    wrap.className = "pp-field";
+    const cap = document.createElement("span");
+    cap.className = "pp-label"; cap.textContent = labelText;
+    wrap.appendChild(cap);
+    let input;
+    if (control === "select") {
+      input = document.createElement("select"); input.className = "pp-input";
+      for (const o of opts.options || []) {
+        const opt = document.createElement("option");
+        opt.value = o.value; opt.textContent = o.label;
+        if (String(o.value) === String(value)) opt.selected = true;
+        input.appendChild(opt);
+      }
+      input.addEventListener("change", () => onCommit(input.value));
+    } else {
+      input = document.createElement("input");
+      input.type = control === "number" ? "number"
+        : (control === "datetime" ? "datetime-local" : "text");
+      input.className = "pp-input";
+      if (control === "number" && opts.min != null) input.min = opts.min;
+      if (opts.placeholder) input.placeholder = opts.placeholder;
+      input.value = value == null ? "" : String(value);
+      const fire = () => onCommit(input.value);
+      input.addEventListener("change", fire);
+      input.addEventListener("blur", fire);
+    }
+    wrap.appendChild(input);
+    return { wrap: wrap, input: input };
+  }
+
+  function renderScheduleInto(container, node) {
+    container.innerHTML = "";
+    const p = node.properties;
+    const h = document.createElement("div");
+    h.className = "pp-title"; h.textContent = "Scheduled Trigger";
+    container.appendChild(h);
+
+    // agent id
+    container.appendChild(schField(
+      "agent id", "text", p.agent_id,
+      (v) => commitSchedule(node, "agent_id", v.trim()),
+      { placeholder: "the workflow this fires" }).wrap);
+
+    // mode segmented control
+    const mode = p.schedule_mode || "cron";
+    const seg = document.createElement("div"); seg.className = "sch-seg";
+    for (const [val, lbl] of [["cron", "Cron"], ["interval", "Interval"], ["date", "One-off"]]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = lbl;
+      if (val === mode) b.classList.add("active");
+      b.addEventListener("click", () => {
+        if ((p.schedule_mode || "cron") === val) return;
+        commitSchedule(node, "schedule_mode", val);
+        renderScheduleInto(container, node);  // re-render for the new mode
+      });
+      seg.appendChild(b);
+    }
+    container.appendChild(seg);
+
+    const sub = document.createElement("div"); sub.className = "sch-sub";
+    container.appendChild(sub);
+    const preview = document.createElement("div"); preview.className = "sch-preview";
+    const paintPreview = () => {
+      preview.innerHTML = "";
+      const lead = document.createElement("span"); lead.textContent = "→ ";
+      const strong = document.createElement("b");
+      const m = p.schedule_mode || "cron";
+      if (m === "interval") strong.textContent = window.PatronScheduleSummary(p);
+      else if (m === "date") strong.textContent = p.run_date ? ("once at " + p.run_date) : "one-off (set a date/time)";
+      else strong.textContent = cronText(p.cron) + (p.timezone ? " · " + p.timezone : "");
+      preview.appendChild(lead); preview.appendChild(strong);
+    };
+
+    if (mode === "cron") {
+      const grid = document.createElement("div"); grid.className = "sch-cron";
+      const cur = String(p.cron || "0 7 * * *").trim().split(/\s+/);
+      while (cur.length < 5) cur.push("*");
+      const boxes = [];
+      CRON_FIELDS.forEach(([lbl], i) => {
+        const cell = document.createElement("div"); cell.className = "sch-cell";
+        const cap = document.createElement("span"); cap.textContent = lbl;
+        const inp = document.createElement("input"); inp.className = "pp-input"; inp.value = cur[i];
+        const commit = () => {
+          cur[i] = (inp.value || "*").trim() || "*"; inp.value = cur[i];
+          commitSchedule(node, "cron", cur.join(" ")); paintPreview();
+        };
+        inp.addEventListener("change", commit); inp.addEventListener("blur", commit);
+        cell.appendChild(cap); cell.appendChild(inp); grid.appendChild(cell); boxes.push(inp);
+      });
+      sub.appendChild(grid);
+      const pf = schField("preset", "select", "", (v) => {
+        if (!v) return;
+        const arr = v.trim().split(/\s+/); while (arr.length < 5) arr.push("*");
+        commitSchedule(node, "cron", v);
+        boxes.forEach((bx, i) => (bx.value = arr[i] || "*"));
+        paintPreview();
+      }, { options: [{ value: "", label: "— quick presets —" }]
+        .concat(CRON_PRESETS.map((x) => ({ value: x.cron, label: x.label }))) });
+      pf.wrap.classList.add("sch-presets");
+      sub.appendChild(pf.wrap);
+      const tz = schField("timezone (IANA · blank = UTC)", "text", p.timezone,
+        (v) => { commitSchedule(node, "timezone", v.trim()); paintPreview(); },
+        { placeholder: "e.g. Europe/Lisbon" });
+      const dl = document.createElement("datalist"); dl.id = "sch-tz-list";
+      for (const z of TZ_COMMON) { const o = document.createElement("option"); o.value = z; dl.appendChild(o); }
+      tz.input.setAttribute("list", "sch-tz-list");
+      tz.wrap.appendChild(dl);
+      sub.appendChild(tz.wrap);
+    } else if (mode === "interval") {
+      const wrap = document.createElement("div"); wrap.className = "pp-field";
+      const cap = document.createElement("span"); cap.className = "pp-label"; cap.textContent = "interval";
+      const row = document.createElement("div"); row.className = "sch-ivl";
+      const every = document.createElement("span");
+      every.textContent = "every"; every.style.cssText = "color:var(--muted);font-size:12px;";
+      const num = document.createElement("input");
+      num.type = "number"; num.min = "1"; num.className = "pp-input sch-num";
+      num.value = p.interval_value == null ? 30 : p.interval_value;
+      const sel = document.createElement("select"); sel.className = "pp-input";
+      for (const u of IVL_UNITS) {
+        const o = document.createElement("option"); o.value = u; o.textContent = u;
+        if (u === (p.interval_unit || "minutes")) o.selected = true; sel.appendChild(o);
+      }
+      const commitNum = () => {
+        let n = parseInt(num.value, 10); if (!(isFinite(n) && n > 0)) n = 1;
+        num.value = n; commitSchedule(node, "interval_value", n); paintPreview();
+      };
+      num.addEventListener("change", commitNum); num.addEventListener("blur", commitNum);
+      sel.addEventListener("change", () => { commitSchedule(node, "interval_unit", sel.value); paintPreview(); });
+      row.appendChild(every); row.appendChild(num); row.appendChild(sel);
+      wrap.appendChild(cap); wrap.appendChild(row); sub.appendChild(wrap);
+    } else {  // date (one-off)
+      sub.appendChild(schField("run at (one-off)", "datetime", p.run_date,
+        (v) => { commitSchedule(node, "run_date", (v || "").trim()); paintPreview(); }).wrap);
+      sub.appendChild(schField("timezone (optional)", "text", p.timezone,
+        (v) => { commitSchedule(node, "timezone", v.trim()); paintPreview(); },
+        { placeholder: "e.g. Europe/Lisbon" }).wrap);
+    }
+
+    container.appendChild(preview);
+    paintPreview();
+
+    // seed / task
+    container.appendChild(schField(
+      "task / query (seed · optional)", "text", p.task,
+      (v) => commitSchedule(node, "task", v),
+      { placeholder: "e.g. latest AI-safety papers" }).wrap);
+
+    addManagementRow(node, container);  // deploy/delete verbs, same as any block
+  }
+
   // Render a block's fields + management into a given container (works for any panel instance).
   function renderBlockInto(container, node) {
+    if (node && node.type === "trigger") { renderScheduleInto(container, node); return; }
     container.innerHTML = "";
     const h = document.createElement("div");
     h.className = "pp-title";

@@ -17,6 +17,7 @@
     "file_initiator":  { file: "icons/file-download-outline.svg" },
     "web_initiator":   { file: "icons/connectors.svg" },
     "stt_initiator":   { file: "icons/left-speech-bubble.svg" },
+    "console_send":    { file: "icons/textbox-48-regular.svg" },
     "agent":           { file: "icons/robot.svg" },
     "rag":             { file: "icons/search.svg" },
     "guardrail":       { file: "icons/check-badge.svg" },
@@ -25,6 +26,7 @@
     "whatsapp":        { file: "icons/whatsapp-icon.svg" },
     "tts":             { file: "icons/voice-activation-1.svg" },
     "bus":             { file: "icons/bus.svg" },
+    "console_receive": { file: "icons/textbox-48-regular.svg" },
     "file_destination":{ file: "icons/file-upload-outline.svg" },
     "web_destination": { file: "icons/web.svg" },
   };

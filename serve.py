@@ -217,6 +217,9 @@ class Handler(SimpleHTTPRequestHandler):
         # Phase 05 §9.4 — cross-project asset-usage: which OTHER projects reference an asset id.
         if p0.startswith(ASSET_USAGE_API + "/"):
             return self._asset_usage(p0[len(ASSET_USAGE_API) + 1:])
+        # Console (Receive): relay the runtime's SSE stream to the browser (long-lived).
+        if p0.startswith(PROJECTS_API + "/") and p0.endswith("/events"):
+            return self._project_events(p0[len(PROJECTS_API) + 1:-len("/events")])
         if p0.startswith(PROJECTS_API + "/"):
             proj = _proj_read(p0[len(PROJECTS_API) + 1:])
             return self._json(200, proj) if proj else self._json(404, {"ok": False, "error": "no such project"})
@@ -240,6 +243,35 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.split("?")[0].startswith("/resources/"):
             return self._proxy_get(f"{RUNTIME_URL}{self.path}")
         return super().do_GET()
+
+    def _project_events(self, uid):
+        """Console (Receive): stream-relay the runtime's SSE (``GET /admin/projects/<uid>/
+        events``) to the browser. The buffering ``_http`` can't do this — we open the
+        upstream and copy each line through as it arrives (ThreadingHTTPServer gives this
+        its own thread, so it never blocks other requests)."""
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        try:
+            upstream = urllib.request.urlopen(f"{RUNTIME_URL}/admin/projects/{uid}/events")
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime: {e.reason}"})
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        try:
+            for line in upstream:            # SSE is line-framed; forward + flush as it arrives
+                self.wfile.write(line)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass                             # browser closed the stream
+        finally:
+            try:
+                upstream.close()
+            except Exception:
+                pass
 
     def _proxy_get(self, url):
         """Relay a GET to a localhost-bound backend (the browser can't reach it)."""
@@ -301,6 +333,9 @@ class Handler(SimpleHTTPRequestHandler):
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/deploy"):
             uid = p0[len(PROJECTS_API) + 1:-len("/deploy")]
             return self._project_deploy(uid)
+        if p0.startswith(PROJECTS_API + "/") and p0.endswith("/fire"):
+            uid = p0[len(PROJECTS_API) + 1:-len("/fire")]
+            return self._project_fire(uid)
         if p0.startswith(UNDEPLOY_API + "/"):
             return self._project_undeploy(p0[len(UNDEPLOY_API) + 1:])
         if self.path.split("?")[0] == COMPOSER_COMPILE:
@@ -382,6 +417,28 @@ class Handler(SimpleHTTPRequestHandler):
         payload = {"name": name or "Untitled Project", "composition": composition}
         try:
             status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/deploy", payload)
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _project_fire(self, uid):
+        """Console Send: manually FIRE a deployed Project. Relays the browser's same-origin
+        POST to the runtime ``POST /admin/projects/<uid>/fire`` with ``{task}`` (the typed
+        message becomes the workflow seed). Requires the project to be deployed."""
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        payload = {"task": str(body.get("task") or "")}
+        try:
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload)
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")

@@ -304,6 +304,34 @@ html, body {
 }
 .pp-btn:hover { border-color: var(--accent); }
 
+/* ---- Scheduled Trigger: dedicated scheduler panel (double-click the block) ---------- */
+/* segmented mode selector: Cron | Interval | One-off */
+.sch-seg { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--panel-border);
+  border-radius: 7px; overflow: hidden; }
+.sch-seg button { flex: 1 1 0; padding: 7px 4px; cursor: pointer; border: 0;
+  border-left: 1px solid var(--panel-border); background: var(--bg); color: var(--text);
+  font: 12px "Roboto", system-ui, sans-serif; letter-spacing: .01em; }
+.sch-seg button:first-child { border-left: 0; }
+.sch-seg button:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
+.sch-seg button.active { background: #f28b7d; color: #2a1512; font-weight: 600; }
+/* cron: 5 small labeled boxes in a row */
+.sch-cron { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+.sch-cron .sch-cell { display: flex; flex-direction: column; gap: 3px; }
+.sch-cron .sch-cell span { font-size: 9px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--muted); text-align: center; }
+.sch-cron .sch-cell input { text-align: center; font-family: ui-monospace, Menlo, monospace; }
+/* interval: "every [N] [unit]" on one line */
+.sch-ivl { display: flex; align-items: center; gap: 8px; }
+.sch-ivl .sch-num { width: 84px; flex: 0 0 auto; }
+.sch-ivl select, .sch-tz select { flex: 1 1 auto; }
+/* live human-readable preview line */
+.sch-preview { margin: 10px 0 4px; padding: 8px 10px; border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  border: 1px dashed var(--panel-border); color: var(--text); font-size: 12px; }
+.sch-preview b { color: var(--accent); font-weight: 600; }
+.sch-presets { margin-top: 9px; }
+.sch-sub { margin: 0 0 12px; }
+
 /* MCP Tools floating panel: one-line toolbar (filter + Select all/Clear + count) + list */
 .mcp-bar {
   display: flex; align-items: center; gap: 8px;

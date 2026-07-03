@@ -183,6 +183,25 @@
   function numW(node, name, min, max) { return displayW(node, name, "number", { min, max }); }
   function comboW(node, name, values) { return displayW(node, name, "combo", { values }); }
 
+  // One-line human summary of a Scheduled Trigger's schedule (shown on the canvas node and
+  // as the panel header preview). Reads the raw block properties. Kept here so the node and
+  // the dedicated scheduler panel (props-panel.js) render the SAME text.
+  function scheduleSummary(p) {
+    p = p || {};
+    const mode = p.schedule_mode || "cron";
+    if (mode === "interval") {
+      const v = p.interval_value == null ? 0 : p.interval_value;
+      let unit = p.interval_unit || "minutes";
+      if (String(v) === "1" && unit.endsWith("s")) unit = unit.slice(0, -1); // "every 1 minute"
+      return "every " + v + " " + unit;
+    }
+    if (mode === "date") {
+      return p.run_date ? ("once at " + p.run_date) : "one-off (unset)";
+    }
+    return "cron " + (p.cron || "0 7 * * *") + (p.timezone ? " · " + p.timezone : "");
+  }
+  global.PatronScheduleSummary = scheduleSummary;
+
   // litegraph's configure() restores node.properties but NOT each widget's displayed
   // .value (widgets keep their constructor value). Re-sync so a LOADED graph shows its
   // saved values, not the node defaults. Called from every configure override below.
@@ -200,20 +219,34 @@
       this.addOutput("out", TYPES.FLOW);
       // Generic defaults for a FRESH block. The News Agent's concrete values live only in
       // its fixture (examples/news-agent.graph.json), loaded by loadNewsAgent — NOT baked here.
+      // The schedule is edited in the DEDICATED Scheduled-Trigger panel (double-click); the
+      // canvas shows only the agent id + a one-line schedule summary. schedule_mode selects
+      // which scheduler trigger kind (cron / interval / date) the fields below drive.
       this.addProperty("agent_id", "");
-      this.addProperty("trigger_type", "schedule");
+      this.addProperty("schedule_mode", "cron");   // cron | interval | date
       this.addProperty("cron", "0 7 * * *");
       this.addProperty("timezone", "");
+      this.addProperty("interval_value", 30);
+      this.addProperty("interval_unit", "minutes");
+      this.addProperty("run_date", "");
       this.addProperty("task", "");
+      this.addProperty("schedule_summary", scheduleSummary(this.properties));
       textW(this, "agent_id");
-      comboW(this, "trigger_type", ["schedule", "channel"]);
-      textW(this, "cron");
-      textW(this, "timezone");
-      textW(this, "task");
+      const sw = textW(this, "schedule_summary"); sw.label = "schedule";
       apply(this, INIT);
+      // Recompute the summary when a graph is LOADED (configure restores raw properties but
+      // a saved graph may predate schedule_summary / carry edited fields).
+      const appliedConfigure = this.configure;
+      this.configure = function (info) {
+        appliedConfigure.call(this, info);
+        this.properties.schedule_summary = scheduleSummary(this.properties);
+        const w = (this.widgets || []).find((x) => x.name === "schedule_summary");
+        if (w) w.value = this.properties.schedule_summary;
+        if (global.PatronFitNodeWidth) global.PatronFitNodeWidth(this);
+      };
     }
     Trigger.title = "Scheduled Trigger";
-    Trigger.desc = "Boundary source: fires the agent on a schedule; holds its id + cron/timezone.";
+    Trigger.desc = "Boundary source: fires the agent on a schedule (cron / interval / one-off date).";
 
     // --- File Initiator: fires when a file appears/changes in a watched folder -
     function FileInitiator() {
@@ -245,6 +278,36 @@
       apply(this, INIT);
     }
     SttInitiator.title = "Speech-to-Text";
+
+    // Console (Send): a MANUAL initiator for testing/debugging. Type a message and click
+    // Send to fire the DEPLOYED workflow with it as the seed (POST …/fire). The fetch +
+    // project-uid lookup lives in app.js (window.PatronConsoleSend); the button just calls it.
+    function ConsoleSend() {
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("agent_id", "");
+      this.addProperty("message", "");
+      textW(this, "message");
+      this.addWidget("button", "Send ▶", null, () => {
+        if (window.PatronConsoleSend) window.PatronConsoleSend(this);
+      });
+      apply(this, INIT);
+    }
+    ConsoleSend.title = "Console (Send)";
+    ConsoleSend.desc = "Fire the deployed workflow with a typed message (testing/debug).";
+
+    // Console (Receive): a display sink. Shows the content that reaches it, pushed live over
+    // SSE (window.PatronConsoleReceive in app.js routes each event to the node by id). The
+    // `received` field holds the latest content; `out` lets it also pass the value onward.
+    function ConsoleReceive() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("label", "");
+      this.addProperty("received", "");
+      textW(this, "received");
+      apply(this, DEST);
+    }
+    ConsoleReceive.title = "Console (Receive)";
+    ConsoleReceive.desc = "Shows the content that reaches it, live (testing/debug).";
     SttInitiator.desc = "Boundary source: fires the workflow when incoming speech is transcribed (speech-to-text).";
 
     // --- Agent: the workhorse; capabilities are CONFIG ------------------------
@@ -357,9 +420,13 @@
     Composite.desc = "A saved workflow referenced as one participant (nesting).";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
-    function destination(channel, defaultTarget, targetLabel) {
+    function destination(channel, defaultTarget, targetLabel, withOutput) {
       function Dest() {
         this.addInput("in", TYPES.FLOW);
+        // Optional pass-through OUT: a destination that ALSO hands its delivered content
+        // onward (e.g. File Destination — persist the file AND forward its content to any
+        // block(s) wired here; the runtime broadcasts to every successor). Sink when unwired.
+        if (withOutput) this.addOutput("out", TYPES.FLOW);
         this.addProperty("target_name", "");
         this.addProperty("target", defaultTarget);
         // Friendly name FIRST (name before id), then the raw id. Both widget KEYs are the
@@ -391,7 +458,7 @@
     Tts.title = "Text-to-Speech";
     const Bus = destination("bus", "", "stream id");
     Bus.title = "Event Bus";
-    const FileDestination = destination("file", "/watched/out/result.txt", "file path");
+    const FileDestination = destination("file", "/watched/out/result.txt", "file path", true);
     FileDestination.title = "File Destination";
     const WebDestination = destination("web", "", "url");
     WebDestination.title = "Web Destination";
@@ -401,6 +468,8 @@
       ["file_initiator", FileInitiator],
       ["web_initiator", WebInitiator],
       ["stt_initiator", SttInitiator],
+      ["console_send", ConsoleSend],
+      ["console_receive", ConsoleReceive],
       ["agent", Agent],
       // RAG-pre and Guardrails are CONFIG on the Agent (rag_domains / guard_* fields); Deploy
       // decomposes them into rag/guardrail runtime nodes. There is no standalone RAG/Guardrail
@@ -429,6 +498,7 @@
       { type: "file_initiator", label: "File Initiator" },
       { type: "web_initiator", label: "Web Initiator" },
       { type: "stt_initiator", label: "Speech-to-Text" },
+      { type: "console_send", label: "Console (Send)" },
     ],
   };
   const PALETTE = {
@@ -449,6 +519,7 @@
       { type: "whatsapp", label: "WhatsApp" },
       { type: "tts", label: "Text-to-Speech" },
       { type: "bus", label: "Event Bus" },
+      { type: "console_receive", label: "Console (Receive)" },
       { type: "file_destination", label: "File Destination" },
       { type: "web_destination", label: "Web Destination" },
     ],

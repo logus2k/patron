@@ -372,6 +372,7 @@
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.ok) {
+        startConsoleReceive(); // the project's Console (Receive) blocks are live now
         const warns = (j.warnings || []);
         const firing = j.firing || {};
         let msg = '✅ Deployed "' + proj.name + '" — version ' + j.version +
@@ -789,23 +790,26 @@
     scheduleSave(); // keep the workspace's persisted identity/version in sync
     inspectOut.textContent = 'Saved "' + p.name + '" (v' + p.version + ').';
   }
-  async function projectNew() {
-    clearCanvas();
-    const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Untitled Project", graph: graph.serialize(), ui: {} }) });
-    const p = await res.json(); setCurrentProject(p);
+  function projectNew() {
+    // A new project is an UNSAVED scratch — do NOT persist a "Untitled Project" record to
+    // the store (that spawned orphan duplicates). The record is created only when the user
+    // Saves (Save As, or Save on a real name). Only the workspace (current canvas) is saved.
+    startEmptyProject();
+    setCurrentProject({ uid: null, name: "Untitled Project", description: "", version: 0 });
     scheduleSave();
-    inspectOut.textContent = 'New project "' + p.name + '".';
+    inspectOut.textContent = "New project — unsaved. Save (or Save As) to store it.";
   }
   function applyProject(p) {
     applyWorkspace({ graph: p.graph, ui: p.ui });
     setCurrentProject(p);
     scheduleSave(); // persist the opened project as the current workspace identity
+    startConsoleReceive(); // (re)open the live SSE for this project's Console (Receive) blocks
     graph.setDirtyCanvas(true, true);
   }
   // Close the current project → empty, unsaved "Untitled Project". Persists the now-empty
   // canvas to the workspace so the next boot also starts empty (no example is re-seeded).
   function projectClose() {
+    if (consoleES) { try { consoleES.close(); } catch (e) {} consoleES = null; }
     startEmptyProject();
     setCurrentProject({ uid: null, name: "Untitled Project", description: "", version: 0 });
     scheduleSave();
@@ -922,6 +926,59 @@
       return currentProject;
     },
   };
+
+  // Console (Send): fire the DEPLOYED workflow with the block's typed `message` as the seed.
+  // Called by the ConsoleSend block's Send button (js/agent_nodes.js). Requires the project
+  // to be saved AND deployed — /fire targets the live GraphRecord by uid.
+  window.PatronConsoleSend = async function (node) {
+    const msg = (node && node.properties && node.properties.message) ? String(node.properties.message) : "";
+    if (!currentProject.uid) {
+      await window.PatronDialogs.confirm({ title: "Console — Send",
+        message: "Save and Deploy this project first.\nSend fires the deployed workflow.", okLabel: "OK" });
+      return;
+    }
+    try {
+      const res = await fetch("api/projects/" + currentProject.uid + "/fire", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: msg }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        showOutput(); inspectOut.textContent = 'Sent (cid ' + (j.cid || "?") + '). Seed: ' + JSON.stringify(msg);
+      } else {
+        const hint = res.status === 404 ? "\n\nIs it deployed? (Build → Deploy)" : "";
+        await window.PatronDialogs.confirm({ title: "Console — Send failed",
+          message: (j.detail || j.error || ("HTTP " + res.status)) + hint, okLabel: "OK" });
+      }
+    } catch (e) {
+      await window.PatronDialogs.confirm({ title: "Console — Send",
+        message: "Could not reach the server: " + e.message, okLabel: "OK" });
+    }
+  };
+
+  // Console (Receive): one live SSE per open project; route each console.output event to the
+  // matching console_receive node by id and show its content. Push-based (no polling).
+  let consoleES = null;
+  function startConsoleReceive() {
+    if (consoleES) { try { consoleES.close(); } catch (e) {} consoleES = null; }
+    if (!currentProject.uid || typeof EventSource === "undefined") return;
+    const es = new EventSource("api/projects/" + currentProject.uid + "/events");
+    es.onmessage = function (e) {
+      let d; try { d = JSON.parse(e.data); } catch (_) { return; }
+      if (!d || !d.node) return;
+      // d.node is "console_receive:<litegraph id>" — match the node on canvas.
+      const node = graph.getNodeById(Number(String(d.node).split(":").pop()));
+      if (!node || node.type !== "console_receive") return;
+      node.properties.received = String(d.output == null ? "" : d.output);
+      const w = (node.widgets || []).find(function (x) { return x.name === "received"; });
+      if (w) w.value = node.properties.received;
+      if (window.PatronFitNodeWidth) window.PatronFitNodeWidth(node);
+      if (node.setDirtyCanvas) node.setDirtyCanvas(true, true);
+      graph.setDirtyCanvas(true, true);
+    };
+    es.onerror = function () { /* EventSource auto-reconnects; ignore transient drops */ };
+    consoleES = es;
+  }
+  window.PatronStartConsoleReceive = startConsoleReceive;
 
   // Insert a block at the current view center (Insert menu / edge menu share the idea).
   function insertBlock(type) {
@@ -1087,36 +1144,17 @@
   // `appReady` guard keeps the initial load from triggering a save over itself.
   let appReady = false;
   let saveTimer = 0;
-  function scheduleSave() {
-    if (!appReady) return;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveWorkspace({ silent: true }), 700);
-  }
-  lgcanvas.onNodeMoved = scheduleSave;                 // dragging a node
-  document.addEventListener("pointerup", scheduleSave); // end of a panel drag/resize, link, etc.
-  // Capture the very latest state right before a reload/close (keepalive lets the
-  // request finish during unload) — so a hard refresh keeps your positions.
-  global.addEventListener("beforeunload", () => {
-    try {
-      fetch(API, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(collectWorkspace()),
-        keepalive: true,
-      });
-    } catch (e) { /* ignore */ }
-  });
+  // Auto-save DISMISSED (fully-explicit model): the canvas is a scratch that is never
+  // persisted automatically. Work is saved only when the user explicitly Saves it as a
+  // project (Save / Save As) and reloaded only via Open Project. scheduleSave is kept as a
+  // no-op so its many call sites stay harmless without churn; the interaction triggers and
+  // the beforeunload writer are removed.
+  function scheduleSave() { /* no-op — auto-save is disabled by design */ }
 
   (async function boot() {
-    let loaded = false;
-    try {
-      const res = await fetch(API, { cache: "no-store" });
-      const ws = await res.json().catch(() => ({}));
-      if (ws && ws.graph) { applyWorkspace(ws); loaded = true; }
-    } catch (e) { /* no server → start fresh */ }
-    // First run (no saved workspace): start with an EMPTY project, not a seeded example.
-    // The News Agent stays available via Project → Open Project (saved) or examples/.
-    if (!loaded) startEmptyProject();
+    // Always start on a blank, unsaved scratch — no workspace is loaded (nothing is
+    // auto-saved). Use Project → Open Project to resume saved work.
+    startEmptyProject();
     graph.setDirtyCanvas(true, true);
     appReady = true;
   })();
