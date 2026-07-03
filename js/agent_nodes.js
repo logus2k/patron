@@ -218,7 +218,7 @@
     // --- File Initiator: fires when a file appears/changes in a watched folder -
     function FileInitiator() {
       this.addOutput("out", TYPES.FLOW);
-      this.addProperty("watch_path", "");
+      this.addProperty("watch_path", "/watched/in");
       this.addProperty("patterns", "*");
       textW(this, "watch_path");
       textW(this, "patterns");
@@ -391,7 +391,7 @@
     Tts.title = "Text-to-Speech";
     const Bus = destination("bus", "", "stream id");
     Bus.title = "Event Bus";
-    const FileDestination = destination("file", "", "file path");
+    const FileDestination = destination("file", "/watched/out/result.txt", "file path");
     FileDestination.title = "File Destination";
     const WebDestination = destination("web", "", "url");
     WebDestination.title = "Web Destination";
