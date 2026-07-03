@@ -317,6 +317,34 @@
     Transform.title = "Data Transform";
     Transform.desc = "Deterministic map in→out; body can be generated from the port schemas.";
 
+    // --- Vector Database: standalone dense-corpus query (outputs results) -----
+    function VectorDatabase() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("domain", "");
+      this.addProperty("top_k", 5);
+      this.addProperty("query", "");
+      textW(this, "domain");
+      numW(this, "top_k", 1, 100);
+      textW(this, "query");
+      apply(this, COLOR);
+    }
+    VectorDatabase.title = "Vector Database";
+    VectorDatabase.desc = "Query a dense vector corpus (noted-rag); outputs the ranked passages. Not agent-coupled.";
+
+    // --- Graph Database: standalone knowledge-graph query (outputs results) ---
+    function GraphDatabase() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("domain", "");
+      this.addProperty("query", "");
+      textW(this, "domain");
+      textW(this, "query");
+      apply(this, COLOR);
+    }
+    GraphDatabase.title = "Graph Database";
+    GraphDatabase.desc = "Query a knowledge graph (noted-graph); outputs entities/relationships. Not agent-coupled.";
+
     // --- Composite: a workflow-as-a-block (nesting) ---------------------------
     function Composite() {
       this.addInput("in", TYPES.FLOW);
@@ -378,6 +406,8 @@
       // decomposes them into rag/guardrail runtime nodes. There is no standalone RAG/Guardrail
       // block (they never lowered — no Python composer block), so they are not registered.
       ["transform", Transform],
+      ["vector_query", VectorDatabase],
+      ["graph_query", GraphDatabase],
       ["composite", Composite],
       ["whatsapp", WhatsApp],
       ["tts", Tts],
@@ -406,6 +436,8 @@
     color: COLOR,
     items: [
       { type: "agent", label: "Agent" },
+      { type: "vector_query", label: "Vector Database" },
+      { type: "graph_query", label: "Graph Database" },
       { type: "transform", label: "Data Transform" },
       { type: "composite", label: "Workflow" },
     ],
