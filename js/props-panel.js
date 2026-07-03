@@ -952,9 +952,9 @@
 
     // agent id
     container.appendChild(schField(
-      "agent id", "text", p.agent_id,
+      "agent id (optional label)", "text", p.agent_id,
       (v) => commitSchedule(node, "agent_id", v.trim()),
-      { placeholder: "the workflow this fires" }).wrap);
+      { placeholder: "optional — the Project uid is the identity" }).wrap);
 
     // mode segmented control
     const mode = p.schedule_mode || "cron";
