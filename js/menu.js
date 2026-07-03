@@ -16,6 +16,7 @@ window.PATRON_MENU = [
     items: [
       { label: "New Project", shortcut: "Ctrl+N", command: "project.new" },
       { label: "Open Project…", shortcut: "Ctrl+O", command: "project.open" },
+      { label: "Close Project", shortcut: "Ctrl+W", command: "project.close" },
       { type: "separator" },
       { label: "Save", shortcut: "Ctrl+S", command: "project.save" },
       { label: "Save As…", shortcut: "Ctrl+Shift+S", command: "project.saveAs" },

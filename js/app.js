@@ -452,6 +452,13 @@
       graph: graph.serialize(), // includes every node's pos/size (canvas components)
       ui: {
         projectName: projectName,
+        // Persist the open project's IDENTITY (not just its display name) so a reload
+        // restores currentProject.uid — otherwise Save can't tell it's an existing project
+        // and falls back to Save As. uid null => an unsaved/closed project (correct).
+        project: {
+          uid: currentProject.uid, name: currentProject.name,
+          description: currentProject.description, version: currentProject.version || 0,
+        },
         theme: document.documentElement.dataset.theme,
         view: { offset: lgcanvas.ds.offset.slice(), scale: lgcanvas.ds.scale },
         panels: {
@@ -486,7 +493,21 @@
       graph.configure(g || {});
     }
     const ui = ws.ui || {};
-    setProjectName(ui.projectName);
+    // Restore the project identity (uid/name/version) when the workspace carried a saved
+    // project, so Save writes to it directly. Legacy workspaces (name only) fall back to
+    // the display name. A persisted uid of null means "unsaved/closed" — leave the default.
+    if (ui.project && ui.project.uid) {
+      setCurrentProject(ui.project);
+    } else {
+      setProjectName(ui.projectName);
+      // Legacy / identity-less workspace (name only): recover the saved project by its name
+      // so Save targets it directly. Best-effort + async; projectSave also re-checks.
+      if (ui.projectName && ui.projectName !== "Untitled Project") {
+        findProjectByName(ui.projectName).then(function (p) {
+          if (p && !currentProject.uid) setCurrentProject(p);
+        });
+      }
+    }
     if (ui.theme) applyTheme(ui.theme);
     if (window.PatronApp) window.PatronApp.blockRects = ui.blockRects || {}; // per-block panel positions
     if (ui.view) {
@@ -665,6 +686,12 @@
     setProjectName("Untitled Project");
     inspectOut.textContent = "Canvas cleared. Drag blocks from the toolbox.";
   }
+  // The empty starting state (first run + Close Project): a blank canvas titled
+  // "Untitled Project", no example seeded. Kept message-free for the boot path.
+  function startEmptyProject() {
+    graph.clear();
+    setProjectName("Untitled Project");
+  }
   function showAbout() {
     const id = "patron-about-overlay";
     const existing = document.getElementById(id);
@@ -714,33 +741,75 @@
       graph: ws.graph, ui: ws.ui,
     }, overrides || {});
   }
+  // A project is "named" once it has a real title (not the blank default).
+  function hasRealName() {
+    const n = (currentProject.name || "").trim();
+    return !!n && n !== "Untitled Project";
+  }
+  // Find a stored project by its display name (best-effort; used to recover a lost identity).
+  async function findProjectByName(name) {
+    if (!name) return null;
+    try {
+      const list = (((await (await fetch(PROJ_API)).json()) || {}).projects) || [];
+      return list.find(function (p) { return (p.name || "") === name; }) || null;
+    } catch (e) { return null; }
+  }
   async function projectSaveAs() {
-    const name = (prompt("Save project as:", currentProject.name || "Untitled Project") || "").trim();
+    const name = (await window.PatronDialogs.prompt({
+      title: "Save Project As", label: "Project name",
+      value: currentProject.name || "Untitled Project", okLabel: "Save",
+    }) || "").trim();
     if (!name) return;
     const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(projDoc({ uid: null, name: name, version: 0 })) });
     const p = await res.json(); setCurrentProject(p);
-    showOutput(); inspectOut.textContent = 'Saved as "' + p.name + '".';
+    scheduleSave(); // flush the new identity into the workspace so a reload keeps it
+    inspectOut.textContent = 'Saved as "' + p.name + '".';
   }
   async function projectSave() {
-    if (!currentProject.uid) return projectSaveAs();
+    // Recover a missing identity by name (legacy workspace / post-reload) so a NAMED
+    // project saves without ever prompting — only a blank "Untitled Project" is asked.
+    if (!currentProject.uid && hasRealName()) {
+      const existing = await findProjectByName(currentProject.name);
+      if (existing) setCurrentProject(existing);
+    }
+    if (!currentProject.uid) {
+      if (!hasRealName()) return projectSaveAs();     // truly unnamed → ask once
+      // Named but not yet a stored project → create it silently under that name.
+      const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(projDoc({ uid: null, name: currentProject.name, version: 0 })) });
+      const p = await res.json(); setCurrentProject(p); scheduleSave();
+      inspectOut.textContent = 'Saved "' + p.name + '".';
+      return;
+    }
     const res = await fetch(PROJ_API + "/" + currentProject.uid, { method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(projDoc({ version: (currentProject.version || 0) + 1 })) });
     const p = await res.json(); currentProject.version = p.version;
-    showOutput(); inspectOut.textContent = 'Saved "' + p.name + '" (v' + p.version + ').';
+    scheduleSave(); // keep the workspace's persisted identity/version in sync
+    inspectOut.textContent = 'Saved "' + p.name + '" (v' + p.version + ').';
   }
   async function projectNew() {
     clearCanvas();
     const res = await fetch(PROJ_API, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Untitled Project", graph: graph.serialize(), ui: {} }) });
     const p = await res.json(); setCurrentProject(p);
+    scheduleSave();
     inspectOut.textContent = 'New project "' + p.name + '".';
   }
   function applyProject(p) {
     applyWorkspace({ graph: p.graph, ui: p.ui });
     setCurrentProject(p);
+    scheduleSave(); // persist the opened project as the current workspace identity
     graph.setDirtyCanvas(true, true);
+  }
+  // Close the current project → empty, unsaved "Untitled Project". Persists the now-empty
+  // canvas to the workspace so the next boot also starts empty (no example is re-seeded).
+  function projectClose() {
+    startEmptyProject();
+    setCurrentProject({ uid: null, name: "Untitled Project", description: "", version: 0 });
+    scheduleSave();
+    inspectOut.textContent = "Project closed. Empty canvas — drag blocks or open a project.";
   }
   let projOpenPanel = null;
   async function projectOpen() {
@@ -773,21 +842,29 @@
     });
   }
   async function projectRename() {
-    const name = (prompt("Rename project:", currentProject.name) || "").trim();
+    const name = (await window.PatronDialogs.prompt({
+      title: "Rename Project", label: "Project name",
+      value: currentProject.name, okLabel: "Rename",
+    }) || "").trim();
     if (!name) return;
     currentProject.name = name; setProjectName(name);
     if (currentProject.uid) await projectSave();
   }
-  function projectSettings() {
-    const desc = prompt("Project settings\n\nName: " + currentProject.name +
-      "\nUID: " + (currentProject.uid || "(unsaved)") + "\nVersion: " + (currentProject.version || 0) +
-      "\n\nEdit the description:", currentProject.description || "");
+  async function projectSettings() {
+    const desc = await window.PatronDialogs.prompt({
+      title: "Project Settings",
+      message: "Name: " + currentProject.name +
+        "   ·   UID: " + (currentProject.uid || "(unsaved)") +
+        "   ·   v" + (currentProject.version || 0),
+      label: "Description", value: currentProject.description || "",
+      multiline: true, okLabel: "Save",
+    });
     if (desc === null) return;
     currentProject.description = desc;
     if (currentProject.uid) projectSave();
   }
   async function projectDelete() {
-    if (!currentProject.uid) { showOutput(); inspectOut.textContent = "This project isn't saved yet."; return; }
+    if (!currentProject.uid) { inspectOut.textContent = "This project isn't saved yet."; return; }
     // §9.4: deleting a Project undeploys it, then checks cross-project asset usage. Warn
     // (and require a second confirm) before removing assets other Projects still reference.
     const shared = await sharedAssetsForCurrentProject();
@@ -799,7 +876,9 @@
         }).join("\n") +
         "\n\nDeleting the project keeps those shared assets intact (they are reusable).";
     }
-    if (!confirm(warn)) return;
+    if (!(await window.PatronDialogs.confirm({
+      title: "Delete Project", message: warn, okLabel: "Delete", danger: true,
+    }))) return;
     await undeployProject({ silent: true }); // remove the live record + firing binding first
     await fetch(PROJ_API + "/" + currentProject.uid, { method: "DELETE" });
     projectNew();
@@ -863,6 +942,7 @@
   // --- Project ---
   menuBar.registerCommand("project.new", projectNew);
   menuBar.registerCommand("project.open", projectOpen);
+  menuBar.registerCommand("project.close", projectClose);
   menuBar.registerCommand("project.save", projectSave);
   menuBar.registerCommand("project.saveAs", projectSaveAs);
   menuBar.registerCommand("project.rename", projectRename);
@@ -1034,8 +1114,9 @@
       const ws = await res.json().catch(() => ({}));
       if (ws && ws.graph) { applyWorkspace(ws); loaded = true; }
     } catch (e) { /* no server → start fresh */ }
-    // First run (no saved workspace): boot the runtime-aligned News Agent.
-    if (!loaded) loadNewsAgent();
+    // First run (no saved workspace): start with an EMPTY project, not a seeded example.
+    // The News Agent stays available via Project → Open Project (saved) or examples/.
+    if (!loaded) startEmptyProject();
     graph.setDirtyCanvas(true, true);
     appReady = true;
   })();

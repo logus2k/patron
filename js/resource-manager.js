@@ -171,7 +171,10 @@
           btn.textContent = v;
           btn.addEventListener("click", async (e) => {
             e.preventDefault(); e.stopPropagation();
-            if (v === "delete" && !window.confirm("Delete " + curType + " '" + key + "'?")) return;
+            if (v === "delete" && !(await window.PatronDialogs.confirm({
+              title: "Delete", message: "Delete " + curType + " '" + key + "'?",
+              okLabel: "Delete", danger: true,
+            }))) return;
             btn.disabled = true;
             const res = await runVerb(curType, key, v);
             if (res && res.ok) { loadItems(curType); }

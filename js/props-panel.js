@@ -814,7 +814,10 @@
       b.type = "button"; b.className = "pp-btn" + (v === "delete" ? " pp-danger" : "");
       b.textContent = v;
       b.addEventListener("click", async () => {
-        if (v === "delete" && !window.confirm("Delete " + map.resource + " '" + key + "'?")) return;
+        if (v === "delete" && !(await window.PatronDialogs.confirm({
+          title: "Delete", message: "Delete " + map.resource + " '" + key + "'?",
+          okLabel: "Delete", danger: true,
+        }))) return;
         b.disabled = true; status.className = "pp-manage-status"; status.textContent = "…";
         const base = "resources/" + encodeURIComponent(map.resource) + "/" + encodeURIComponent(key);
         const url = v === "delete" ? base : base + "/" + encodeURIComponent(v);
