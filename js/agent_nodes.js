@@ -204,10 +204,12 @@
       this.addProperty("trigger_type", "schedule");
       this.addProperty("cron", "0 7 * * *");
       this.addProperty("timezone", "");
+      this.addProperty("task", "");
       textW(this, "agent_id");
       comboW(this, "trigger_type", ["schedule", "channel"]);
       textW(this, "cron");
       textW(this, "timezone");
+      textW(this, "task");
       apply(this, INIT);
     }
     Trigger.title = "Scheduled Trigger";
@@ -299,31 +301,10 @@
     Agent.title = "Agent";
     Agent.desc = "The workhorse: persona (selects the model), tools/memory as config, runs the tool loop.";
 
-    // --- RAG: pre-inference retrieve-then-inject (wire before an Agent) -------
-    function Rag() {
-      this.addInput("in", TYPES.FLOW);
-      this.addOutput("out", TYPES.FLOW);
-      this.addProperty("rewriter", "");
-      this.addProperty("domains", "");
-      textW(this, "rewriter");
-      textW(this, "domains");
-      apply(this, COLOR);
-    }
-    Rag.title = "RAG";
-    Rag.desc = "Pre-inference retrieve-then-inject; wire before an Agent to augment its input.";
-
-    // --- Guardrail: input/output checks (wire before/after an Agent) ----------
-    function Guardrail() {
-      this.addInput("in", TYPES.FLOW);
-      this.addOutput("out", TYPES.FLOW);
-      this.addProperty("forbidden", "");
-      this.addProperty("min_confidence", 0.5);
-      textW(this, "forbidden");
-      numW(this, "min_confidence", 0, 1);
-      apply(this, COLOR);
-    }
-    Guardrail.title = "Guardrail";
-    Guardrail.desc = "Checks (forbidden patterns / min confidence); wire before/after an Agent.";
+    // NOTE: RAG-pre and Guardrails are NOT standalone blocks — they are CONFIG on the Agent
+    // (rag_rewriter/rag_domains/rag_use_graph and guard_forbidden/guard_min_confidence). Deploy
+    // decomposes an Agent's rag/guardrail config into rag/guardrail runtime nodes
+    // (…→[rag]→agent→[guardrail]→…). There is therefore no draggable RAG/Guardrail block.
 
     // --- Transform: deterministic map (can be LLM-generated) ------------------
     function Transform() {
@@ -393,8 +374,9 @@
       ["web_initiator", WebInitiator],
       ["stt_initiator", SttInitiator],
       ["agent", Agent],
-      ["rag", Rag],
-      ["guardrail", Guardrail],
+      // RAG-pre and Guardrails are CONFIG on the Agent (rag_domains / guard_* fields); Deploy
+      // decomposes them into rag/guardrail runtime nodes. There is no standalone RAG/Guardrail
+      // block (they never lowered — no Python composer block), so they are not registered.
       ["transform", Transform],
       ["composite", Composite],
       ["whatsapp", WhatsApp],
@@ -424,8 +406,6 @@
     color: COLOR,
     items: [
       { type: "agent", label: "Agent" },
-      { type: "rag", label: "RAG" },
-      { type: "guardrail", label: "Guardrail" },
       { type: "transform", label: "Data Transform" },
       { type: "composite", label: "Workflow" },
     ],
