@@ -190,25 +190,32 @@
 
       grp.items.forEach((it) => {
         const el = document.createElement("div");
-        el.className = "palette-item";
-        el.draggable = true;
+        // A palette item may be DISABLED (e.g. Transform/Workflow — kept visible so authors
+        // know they're planned, but not yet runnable, so not droppable). Disabled items are
+        // greyed, non-draggable, and inert on double-click — never silently dropped at deploy.
+        el.className = "palette-item" + (it.disabled ? " disabled" : "");
+        el.draggable = !it.disabled;
         el.style.borderLeftColor = grp.color;
         el.dataset.type = it.type;
         const ico = (window.PatronIcons && window.PatronIcons.has(it.type))
           ? '<span class="icon">' + window.PatronIcons.svgString(it.type, 20) + "</span>"
           : '<span class="swatch" style="background:' + grp.color + '"></span>';
         el.innerHTML = ico + it.label;
-        el.addEventListener("dragstart", (e) => {
-          e.dataTransfer.setData("text/plain", it.type);
-        });
-        // double-click also drops it near the view center
-        el.addEventListener("dblclick", () => {
-          const r = lgcanvas.ds; // DragAndScale
-          spawnNode(it.type, [
-            (-r.offset[0]) + 200 / r.scale,
-            (-r.offset[1]) + 150 / r.scale,
-          ]);
-        });
+        if (it.disabled) {
+          el.title = "Not yet available — coming soon";
+        } else {
+          el.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", it.type);
+          });
+          // double-click also drops it near the view center
+          el.addEventListener("dblclick", () => {
+            const r = lgcanvas.ds; // DragAndScale
+            spawnNode(it.type, [
+              (-r.offset[0]) + 200 / r.scale,
+              (-r.offset[1]) + 150 / r.scale,
+            ]);
+          });
+        }
         g.appendChild(el);
       });
       root.appendChild(g);

@@ -219,6 +219,8 @@ html, body {
 }
 .palette-item:hover { background: var(--item-bg-hover); }
 .palette-item:active { cursor: grabbing; }
+.palette-item.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+.palette-item.disabled:hover { background: none; }
 .palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .palette-item .icon svg, .palette-item .icon img { display: block; } /* size comes from the icon's own width/height (per-icon scale) */
 .palette-item .swatch {

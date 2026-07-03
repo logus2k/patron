@@ -438,8 +438,8 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
-      { type: "transform", label: "Data Transform" },
-      { type: "composite", label: "Workflow" },
+      { type: "transform", label: "Data Transform", disabled: true },
+      { type: "composite", label: "Workflow", disabled: true },
     ],
   };
   const DESTINATIONS = {
