@@ -244,7 +244,6 @@
   }
   function setPinned(v) {
     controlsPinned = v;
-    if (menuBar) { menuBar.setContext("controlsPinned", v); if (menuBar.refresh) menuBar.refresh(); }
     refreshControlsMode(); scheduleSave();
   }
   function toggleControls() {
@@ -534,6 +533,7 @@
     } catch (e) {
       inspectOut.textContent = "❌ Deploy failed — no Patron server. Run `python3 serve.py`.";
     }
+    refreshStatus(); // a deploy flips the badge → DEPLOYED (in sync) or surfaces the failure
   }
 
   // Undeploy: remove the live runtime record + firing binding. Source assets stay intact
@@ -556,6 +556,7 @@
             ((j.warnings || []).length ? "\n- " + j.warnings.join("\n- ") : "")
           : "❌ Undeploy failed: " + (j.error || ("HTTP " + res.status)) + (j.detail ? "\n\n" + j.detail : "");
       }
+      refreshStatus(); // undeploy flips the badge → NOT DEPLOYED
       return j;
     } catch (e) {
       if (!silent) { showOutput(); inspectOut.textContent = "❌ Undeploy failed — no Patron server."; }
@@ -683,10 +684,7 @@
     // with only `zoomVisible` maps to controlsVisible.
     controlsVisible = ui.controlsVisible !== undefined ? !!ui.controlsVisible : (ui.zoomVisible !== false);
     controlsPinned = !!ui.controlsPinned;
-    if (menuBar) {
-      menuBar.setContext("controlsVisible", controlsVisible);
-      menuBar.setContext("controlsPinned", controlsPinned);
-    }
+    if (menuBar) menuBar.setContext("controlsVisible", controlsVisible);
     refreshControlsMode();
     graph.setDirtyCanvas(true, true);
     // Restore the previous selection (auto-save captures it on pointerup).
@@ -870,7 +868,6 @@
   menuBar.setContext("isLight", document.documentElement.dataset.theme !== "dark");
   menuBar.setContext("toolboxVisible", true);
   menuBar.setContext("controlsVisible", true);
-  menuBar.setContext("controlsPinned", false);
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
@@ -1191,7 +1188,6 @@
   // --- View ---
   menuBar.registerCommand("view.toolbox", toggleToolbox);
   menuBar.registerCommand("view.controls", toggleControls);
-  menuBar.registerCommand("view.pinControls", () => setPinned(!controlsPinned));
   menuBar.registerCommand("view.output", toggleOutput);
   menuBar.registerCommand("view.trace", () => { if (window.PatronTrace) window.PatronTrace.toggle(); });
   menuBar.registerCommand("theme.dark", () => { applyTheme("dark"); scheduleSave(); });
@@ -1204,7 +1200,6 @@
   // --- Planned (stubs — announce, don't crash) ---
   ["project.import", "project.export",
    "edit.undo", "edit.redo",
-   "build.validate", "build.status",
    "help.docs", "help.shortcuts"]
     .forEach((id) => menuBar.registerCommand(id, () => stub(id)));
 
@@ -1332,6 +1327,16 @@
   createOutputPanel();
   resizeCanvas();
 
+  // Deploy status badge: mount it and wire a click to reveal the reason in the Output panel
+  // (this is the ONE place the badge opens Output — it never pops open on its own).
+  if (window.PatronStatus) {
+    window.PatronStatus.mount(document.getElementById("deploy-badge"));
+    window.PatronStatus.onClick((state, detail) => {
+      inspectOut.textContent = detail || "No details.";
+      showOutput();
+    });
+  }
+
   // Auto-persistence (server-side): load the saved workspace on start and save
   // automatically as things change — so the explicit 💾 Save is optional. The
   // `appReady` guard keeps the initial load from triggering a save over itself.
@@ -1342,7 +1347,27 @@
   // project (Save / Save As) and reloaded only via Open Project. scheduleSave is kept as a
   // no-op so its many call sites stay harmless without churn; the interaction triggers and
   // the beforeunload writer are removed.
-  function scheduleSave() { /* no-op — auto-save is disabled by design */ }
+  // Auto-save is a no-op, but every mutation still routes through here — so it's the natural
+  // pulse for the deploy-status badge: each edit (debounced) re-checks deploy-readiness.
+  function scheduleSave() { scheduleStatus(); }
+
+  // --- Deploy status badge (bottom-left) --------------------------------------
+  // Near-real-time deploy-readiness of the CURRENT graph: lower it with the SAME compiler as
+  // Deploy via a dry run (POST /api/projects/<uid>/status, no persistence) on start and,
+  // debounced, on every edit. status-badge.js paints it; a click opens Output with the reason.
+  function statusCtx() {
+    const proj = window.PatronProjects && window.PatronProjects.current();
+    return {
+      saved: !!(proj && proj.uid),
+      uid: proj && proj.uid,
+      name: proj && proj.name,
+      graph: graph.serialize(),
+    };
+  }
+  function refreshStatus() { if (window.PatronStatus) window.PatronStatus.check(statusCtx()); }
+  function scheduleStatus() {
+    if (appReady && window.PatronStatus) window.PatronStatus.scheduleCheck(statusCtx);
+  }
 
   (async function boot() {
     // Always start on a blank, unsaved scratch — no workspace is loaded (nothing is
@@ -1350,6 +1375,7 @@
     startEmptyProject();
     graph.setDirtyCanvas(true, true);
     appReady = true;
+    refreshStatus(); // recompile-on-start: paint the badge from the initial graph
   })();
 
   // Expose for console tinkering + the Properties panel (js/props-panel.js).

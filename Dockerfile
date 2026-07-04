@@ -28,8 +28,9 @@ ENV AGENT_RUNTIME_URL=http://agent-runtime-app:6817
 # Deploy also upserts the agent_scheduler cron job, linked by event_data.agent_uid.
 ENV AGENT_SCHEDULER_URL=http://agent-scheduler-app:6816
 
-# Liveness: the workspace API always returns 200 (even with no saved doc yet).
+# Liveness: the static index (GET /) always returns 200. (The old /api/workspace probe
+# broke once that endpoint was dropped for the per-project store — see serve.py.)
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8088/api/workspace'); sys.exit(0)"
+  CMD python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8088/'); sys.exit(0)"
 
 CMD ["python3", "serve.py"]

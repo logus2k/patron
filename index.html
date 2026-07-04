@@ -29,6 +29,10 @@
       <canvas id="graph-canvas" tabindex="1"></canvas>
     </main>
 
+    <!-- Deploy status badge (bottom-left): near-real-time deploy-readiness of the current
+         graph. Click a non-green badge to open the Output panel with the reason. -->
+    <button id="deploy-badge" type="button" title="Deploy status"></button>
+
 
     <!-- vendored libraries -->
     <script src="vendor/litegraph/litegraph.js"></script>
@@ -37,6 +41,8 @@
     <script src="js/litegraph-patches.js"></script>
     <!-- edge resize cursors + width-resize + crosshair fix (must load before app.js) -->
     <script src="js/node-resize.js"></script>
+    <!-- hover-only title-bar "×" to remove a block (confirm unless pristine); after node-resize, before app.js -->
+    <script src="js/node-delete.js"></script>
     <!-- per-block filled/colored SVG icons (title box + toolbox); load before app.js -->
     <script src="js/block-icons.js"></script>
     <!-- inline widget editing (overrides litegraph's detached prompt) -->
@@ -49,10 +55,13 @@
     <!-- pull-down menu bar (vendored from noted) + its data model -->
     <script src="js/MenuBar.js"></script>
     <script src="js/menu.js"></script>
+    <script src="js/status-badge.js"></script>
     <!-- app bootstrap + wiring -->
     <script src="js/app.js"></script>
     <!-- Properties panel (edits the selected node's fields in an HTML form) -->
     <script src="js/props-panel.js"></script>
+    <!-- logged-in user avatar (top-right) + name/email/logout popup -->
+    <script src="js/user-menu.js"></script>
     <!-- dedicated tabbed Agent configuration panel (reuses props-panel field renderers) -->
     <script src="js/agent-config-panel.js"></script>
     <!-- generic Resource Manager panel (lists any declared resource from /resources/catalog) -->

@@ -76,13 +76,12 @@ window.PATRON_MENU = [
     label: "Build",
     key: "B",
     items: [
-      { label: "Validate", command: "build.validate" },
-      { type: "separator" },
+      // Validate + Deployment Status were removed — the live deploy-status badge (bottom-left)
+      // now shows compile-readiness and deploy state continuously (see js/status-badge.js).
       { label: "Deploy", shortcut: "Ctrl+Enter", command: "build.deploy" },
       { label: "Undeploy", command: "build.undeploy" },
       { label: "Delete Deployment…", command: "build.deleteDeployment" },
       { type: "separator" },
-      { label: "Deployment Status…", command: "build.status" },
       { label: "Compile to DSL", command: "build.compile" },
     ],
   },
@@ -94,7 +93,6 @@ window.PATRON_MENU = [
       { label: "Output Panel", command: "view.output", type: "checkbox", checked: "outputVisible" },
       { label: "Trace Panel", command: "view.trace", type: "checkbox", checked: "traceVisible" },
       { label: "Canvas Controls", command: "view.controls", type: "checkbox", checked: "controlsVisible" },
-      { label: "Pin Controls", command: "view.pinControls", type: "checkbox", checked: "controlsPinned" },
       { type: "separator" },
       // Both themes shown; a checkbox marks the active one.
       { label: "Dark Theme", command: "theme.dark", type: "checkbox", checked: "isDark" },

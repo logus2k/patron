@@ -130,6 +130,44 @@ html, body {
 }
 #btn-theme { min-width: 84px; }
 
+/* ---- logged-in user: top-right initials avatar + click popup (js/user-menu.js) ---- */
+#user-avatar {
+  position: fixed; top: 8px; right: 14px; z-index: 100001;
+  width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff; font: 600 13px "Roboto", system-ui, sans-serif;
+  cursor: pointer; pointer-events: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+#user-avatar:hover, #user-avatar.open { filter: brightness(1.08); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+#user-avatar img, #user-pop .up-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+#user-pop {
+  position: fixed; top: 48px; right: 14px; z-index: 100001;
+  width: 232px; padding: 12px; pointer-events: auto;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--panel-border); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  font: 13px "Roboto", system-ui, sans-serif;
+}
+#user-pop .up-head { display: flex; align-items: center; gap: 10px; }
+#user-pop .up-av {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
+  color: #fff; font-weight: 600; font-size: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+#user-pop .up-who { min-width: 0; }
+#user-pop .up-name { font-weight: 600; line-height: 1.2; }
+#user-pop .up-email { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#user-pop .up-sep { height: 1px; background: var(--panel-border); margin: 11px 0; }
+#user-pop .up-logout {
+  width: 100%; display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: pointer; text-align: left;
+  border: 1px solid var(--panel-border); border-radius: 7px;
+  background: var(--bg); color: var(--text); font: inherit;
+}
+#user-pop .up-logout:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ---- in-app modal dialogs (js/dialogs.js) ---- */
 .ptdlg-overlay {
   position: fixed; inset: 0; z-index: 10000;
@@ -481,3 +519,70 @@ html, body {
   word-break: break-word;
   color: var(--code);
 }
+
+/* ============================================================================
+   Deploy status badge (bottom-left) — near-real-time deploy-readiness of the
+   current graph. One state class (db-<state>) drives the color. Only error /
+   modified / offline are clickable-for-detail (db-actionable). See status-badge.js.
+   ============================================================================ */
+#deploy-badge {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  /* Above floating panels (jsPanel base z-index 100) so the status pill stays visible and
+     clickable even when the Toolbox/Output panel overlaps the bottom-left corner; still below
+     modal dialogs (backdrop z-index 9999) so a modal covers it. */
+  z-index: 5000;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: default;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+#deploy-badge .db-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  transition: background 0.15s;
+}
+#deploy-badge.db-actionable { cursor: pointer; }
+#deploy-badge.db-actionable:hover { border-color: var(--accent); }
+
+/* --- per-state colors (dot + accent tint) --- */
+#deploy-badge.db-deployed   { border-color: #3aa657; color: #b8e6c2; }
+#deploy-badge.db-deployed   .db-dot { background: #45c467; box-shadow: 0 0 6px #45c46788; }
+#deploy-badge.db-modified   { border-color: #c99332; color: #f0d59a; }
+#deploy-badge.db-modified   .db-dot { background: #e6a83c; }
+#deploy-badge.db-undeployed { border-color: #4a6a90; color: #b7cbe2; }
+#deploy-badge.db-undeployed .db-dot { background: #6f96c4; }
+#deploy-badge.db-error      { border-color: #c0453f; color: #f0b6b3; }
+#deploy-badge.db-error      .db-dot { background: #e0554f; box-shadow: 0 0 6px #e0554f88; }
+#deploy-badge.db-offline    { border-color: #8a5a5a; color: #e0bcbc; }
+#deploy-badge.db-offline    .db-dot { background: #b56b6b; }
+#deploy-badge.db-unsaved    .db-dot,
+#deploy-badge.db-empty      .db-dot { background: var(--muted); }
+#deploy-badge.db-empty      { opacity: 0.7; }
+#deploy-badge.db-checking   .db-dot { background: var(--accent); animation: db-pulse 0.9s ease-in-out infinite; }
+@keyframes db-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+:root[data-theme="light"] #deploy-badge {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+:root[data-theme="light"] #deploy-badge.db-deployed { color: #1c7a3a; }
+:root[data-theme="light"] #deploy-badge.db-modified { color: #9a6a12; }
+:root[data-theme="light"] #deploy-badge.db-undeployed { color: #2f5580; }
+:root[data-theme="light"] #deploy-badge.db-error { color: #a5322c; }
+:root[data-theme="light"] #deploy-badge.db-offline { color: #8a4b4b; }

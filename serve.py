@@ -91,6 +91,39 @@ def _http(method, url, body=None, headers=None):
         return resp.status, (json.loads(raw) if raw else None)
 
 
+# --- Google profile (real name + picture) for the user menu ------------------
+# Google omits name/picture from the ID token AND from the X-Auth-Request-* headers;
+# they live only at the UserInfo endpoint, fetched with the OAuth access token that
+# oauth2-proxy forwards (--pass-access-token → X-Auth-Request-Access-Token, which the
+# /patron nginx location must copy to the upstream). Mirrors job2cool's proven pattern.
+_GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+_userinfo_cache = {}  # access_token -> (expires_at, claims); token rotates ~hourly
+
+
+def _google_userinfo(access_token):
+    """Real profile claims {name, picture, email} for an access token, or {} if
+    unavailable (no token in dev, expired token, or the endpoint errors)."""
+    if not access_token:
+        return {}
+    now = time.time()
+    hit = _userinfo_cache.get(access_token)
+    if hit and hit[0] > now:
+        return hit[1]
+    info = {}
+    try:
+        status, body = _http("GET", _GOOGLE_USERINFO_URL,
+                             headers={"Authorization": f"Bearer {access_token}"})
+        if status == 200 and isinstance(body, dict):
+            info = body
+    except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
+        info = {}
+    if info:
+        if len(_userinfo_cache) > 256:
+            _userinfo_cache.clear()
+        _userinfo_cache[access_token] = (now + 600, info)
+    return info
+
+
 # --- Project store (file-backed; data/projects/<uid>.json) -------------------
 def _proj_path(uid):
     return os.path.join(PROJECTS, uid + ".json")
@@ -259,6 +292,22 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         p0 = self.path.split("?")[0]
+        # Who is logged in — for the top-right user menu. Identity comes from the edge proxy's
+        # verified headers (X-Auth-Request-User/-Email); dev/no-proxy falls back to
+        # DEFAULT_PRINCIPAL. No profile picture is available from the proxy headers, so the UI
+        # renders an initials avatar.
+        if p0 == "/api/me":
+            # Real name + picture come from Google's UserInfo (via the forwarded access token);
+            # they are NOT in the proxy headers. Fall back to preferred_username for the name,
+            # else "" (the UI shows the email alone — we never fabricate a name from the email).
+            info = _google_userinfo(self.headers.get("X-Auth-Request-Access-Token", "").strip())
+            email = self._principal_email() or (info.get("email") or "").strip() or self._principal()
+            name = (info.get("name") or "").strip()
+            if not name:
+                pref = (self.headers.get("X-Auth-Request-Preferred-Username") or "").strip()
+                name = pref if pref and pref != email else ""
+            return self._json(200, {"user": self._principal(), "email": email,
+                                    "name": name, "picture": (info.get("picture") or "").strip()})
         if p0 == PROJECTS_API:
             # Multi-tenancy: list only the caller's projects (admins see all).
             p = self._principal()
@@ -374,6 +423,9 @@ class Handler(SimpleHTTPRequestHandler):
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/fire"):
             uid = p0[len(PROJECTS_API) + 1:-len("/fire")]
             return self._project_fire(uid)
+        if p0.startswith(PROJECTS_API + "/") and p0.endswith("/status"):
+            uid = p0[len(PROJECTS_API) + 1:-len("/status")]
+            return self._project_status(uid)
         if p0.startswith(UNDEPLOY_API + "/"):
             return self._project_undeploy(p0[len(UNDEPLOY_API) + 1:])
         if self.path.split("?")[0] == COMPOSER_COMPILE:
@@ -482,6 +534,34 @@ class Handler(SimpleHTTPRequestHandler):
         payload = {"task": str(body.get("task") or "")}
         try:
             status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload, headers=self._farm_headers())
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _project_status(self, uid):
+        """Deploy-readiness of the CURRENT (unsaved-to-farm) composition — powers the status
+        badge. Relays the browser's same-origin POST to the runtime ``POST /admin/projects/
+        <uid>/status`` (a pure DRY RUN: lowers with the deploy compiler, never persists).
+        Body: ``{name, composition}`` (bare graph accepted). Response verbatim:
+        ``{ok, errors, warnings, deployed, deployed_version, in_sync}``."""
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        name = (body.get("name") or "").strip()
+        composition = body.get("composition")
+        if composition is None:
+            composition = {"nodes": body.get("nodes") or [], "links": body.get("links") or []}
+        payload = {"name": name or "Untitled Project", "composition": composition}
+        try:
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/status", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
