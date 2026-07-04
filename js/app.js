@@ -588,6 +588,21 @@
     }
     p.style.display = r.hidden ? "none" : "";
   }
+  // If a floating panel (jsPanel) has drifted off-screen — saved on a bigger window, moved, or
+  // anchored past a smaller viewport's edge — clamp it back into view so "show it" actually
+  // reveals it. No-op when the panel is already on screen, so an intentional position is kept.
+  function ensureOnScreen(panel) {
+    if (!panel || !panel.classList || !panel.classList.contains("jsPanel")) return;
+    const r = panel.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight, pad = 8, margin = 40;
+    const offScreen = r.right < margin || r.left > vw - margin || r.bottom < margin || r.top > vh - margin;
+    if (!offScreen) return;
+    const w = r.width || 252, h = r.height || 200;
+    const left = Math.max(pad, Math.min(vw - w - pad, parseFloat(panel.style.left) || r.left));
+    const top = Math.max(pad, Math.min(vh - h - pad, parseFloat(panel.style.top) || r.top));
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+  }
   function collectWorkspace() {
     return {
       version: 1,
@@ -660,6 +675,9 @@
     }
     const panels = ui.panels || {};
     applyPanelRect(toolboxPanel, panels.toolbox);
+    // Keep the View ▸ Toolbox checkbox in step with the restored panel — else a project saved
+    // with the toolbox hidden leaves the box "checked" while the panel is gone (and vice-versa).
+    if (menuBar && toolboxPanel) menuBar.setContext("toolboxVisible", toolboxPanel.style.display !== "none");
     // Output is a transient results panel (opened on demand via 📄 Output / Compile): restore
     // its position/size but keep it HIDDEN by default, regardless of last-saved visibility.
     applyPanelRect(outputPanel, panels.output);
@@ -1257,6 +1275,7 @@
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
       callback: (p) => {
+        p.classList.add("patron-toolbox");  // its header is ALWAYS the pastel-green "active" look
         p.content.style.cssText = "padding:10px;overflow-y:auto;background:var(--panel);color:var(--text)";
         const host = document.createElement("div");
         host.id = "palette";
@@ -1318,21 +1337,28 @@
     if (menuBar) { menuBar.setContext("outputVisible", visible); menuBar.refresh(); }
   }
   function showOutput() {
-    outputEl().style.display = "";
+    const el = outputEl();
+    el.style.display = "";
+    ensureOnScreen(el);
     if (outputPanel) outputPanel.front && outputPanel.front();
     syncOutputMenu(true);
   }
   function toggleOutput() {
     const el = outputEl();
-    el.style.display = el.style.display === "none" ? "" : "none";
+    const showing = el.style.display === "none";   // about to show
+    el.style.display = showing ? "" : "none";
+    if (showing) { ensureOnScreen(el); if (el.front) el.front(); }
     syncOutputMenu(el.style.display !== "none");
   }
-  // Toolbox toggle (mirrors Output) — the jsPanel, or the #palette sidebar fallback.
+  // Toolbox toggle (mirrors Output) — the jsPanel, or the #palette sidebar fallback. Showing
+  // always brings it ON SCREEN + to front, so a checked menu item = a visible panel.
   function toolboxEl() { return toolboxPanel || document.getElementById("palette"); }
   function toggleToolbox() {
     const el = toolboxEl();
     if (!el) return;
-    el.style.display = el.style.display === "none" ? "" : "none";
+    const showing = el.style.display === "none";   // about to show
+    el.style.display = showing ? "" : "none";
+    if (showing) { ensureOnScreen(el); if (el.front) el.front(); }
     if (menuBar) { menuBar.setContext("toolboxVisible", el.style.display !== "none"); menuBar.refresh(); }
   }
 
@@ -1393,6 +1419,7 @@
   })();
 
   // Expose for console tinkering + the Properties panel (js/props-panel.js).
+  global.PatronApp.ensureOnScreen = ensureOnScreen;
   global.PatronApp.graph = graph;
   global.PatronApp.canvas = lgcanvas;
   global.PatronApp.scheduleSave = scheduleSave;

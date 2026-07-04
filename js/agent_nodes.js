@@ -86,11 +86,11 @@
   function iconize(node) {
     node.onDrawTitleBox = function (ctx, title_height) {
       if (global.PatronIcons && global.PatronIcons.has(this.type)) {
-        // Icon colour = the title-text colour for this state: on a light surface #1d1d1d,
-        // on a dark surface #fff. Selecting a node flips the title bar to the amber/orange
-        // selection colour, so the icon flips too (light↔dark).
+        // Icon colour = the title-text colour for this state. Selected → the orange selection
+        // bar (both themes) reads best with a WHITE icon; unselected → theme base (#1d1d1d on
+        // the light node title, #fff on the dark one).
         const light = document.documentElement.dataset.theme === "light";
-        const col = (light !== !!this.is_selected) ? "#1d1d1d" : "#ffffff";
+        const col = (light && !this.is_selected) ? "#1d1d1d" : "#ffffff";
         global.PatronIcons.drawTitleBox(ctx, this.type, title_height, col);
       }
     };

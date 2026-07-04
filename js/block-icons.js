@@ -16,7 +16,7 @@
     "trigger":         { file: "icons/alarm.svg" },
     "file_initiator":  { file: "icons/file-download-outline.svg" },
     "web_initiator":   { file: "icons/api.svg" },
-    "stt_initiator":   { file: "icons/speech-bubble.svg" },
+    "stt_initiator":   { file: "icons/speech-balloon.svg" },
     "console_send":    { file: "icons/textbox-48-regular.svg" },
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },

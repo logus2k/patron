@@ -29,13 +29,13 @@
   --node-box: #666666;
   --node-text: #aaaaaa;
   --node-title-text: #cccccc;
-  --node-selected-title: #233040; /* selected-title text — dark reads well on the amber selection bar */
+  --node-selected-title: #ffffff; /* selected-title text — WHITE, reads on the orange selection bar (same as light) */
   --widget-bg: #222222;
   --widget-outline: #666666;
   --widget-text: #dddddd;
   --widget-text2: #999999;
   --link: #9aa9a9;
-  --link-highlight: #ffb02e; /* bright amber — pops on dark paper (also the selection border) */
+  --link-highlight: #f5520c; /* selection border + selected edge — SAME strong orange as the light theme */
   --icon-fg: #ffffff;        /* normalized monochrome icon colour on dark surfaces (white) */
 }
 
@@ -286,7 +286,10 @@ html, body {
 /* the active (last-clicked / fronted) panel gets a light amber title bar — set via
    js/panel-active.js. !important because jsPanel writes the header background INLINE
    (per-theme white), which a normal rule can't override. */
-.jsPanel.patron-active .jsPanel-hdr { background: #ffe5b6 !important; }
+.jsPanel.patron-active .jsPanel-hdr { background: #ffd07c !important; }
+/* The Toolbox header is ALWAYS the pastel-green "active" look (it's the Toolbox), never white. */
+.jsPanel.patron-toolbox .jsPanel-hdr,
+.jsPanel.patron-toolbox.patron-active .jsPanel-hdr { background: #7cd694 !important; }
 .jsPanel .jsPanel-titlebar { height: 30px; /* margin-top: 2px; */ } /* match the litegraph block title height (30px) */
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 /* jsPanel defaults the title to small-caps — override to normal case. */
@@ -341,6 +344,10 @@ html, body {
   -webkit-mask-position: center; mask-position: center;
   -webkit-mask-size: contain; mask-size: contain;
 }
+/* Panel HEADERS are light (white) with dark title text in BOTH themes, so a header icon must
+   follow the title-text colour — NOT --icon-fg (which is white on dark). currentColor = the
+   title colour, so the icon always contrasts with the light header. */
+.jsPanel-title .icon-mask { background-color: currentColor; }
 .palette-item .icon svg, .palette-item .icon img { display: block; } /* size comes from the icon's own width/height (per-icon scale) */
 .palette-item .swatch {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;

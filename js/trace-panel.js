@@ -102,7 +102,7 @@
 
   global.PatronTrace = {
     push: push,
-    open: function () { ensurePanel(); if (panel) { panel.style.display = ""; if (panel.front) panel.front(); render(); if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", true); } },
+    open: function () { ensurePanel(); if (panel) { panel.style.display = ""; if (panel.front) panel.front(); if (global.PatronApp && global.PatronApp.ensureOnScreen) global.PatronApp.ensureOnScreen(panel); render(); if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", true); } },
     close: function () { if (panel) panel.close(); },
     toggle: function () { if (panel) this.close(); else this.open(); },
     isOpen: function () { return !!panel; },
