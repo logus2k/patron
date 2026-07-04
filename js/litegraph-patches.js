@@ -713,7 +713,7 @@
                         var measure = ctx.measureText(title);
                         ctx.fillText(
                             title.substr(0,20), //avoid urls too long
-                            30,// stripe4 + pad4 + icon18 + pad4 right — was title_height
+                            32,// stripe4 + pad6 + icon18 + pad4 right — was title_height
                             LiteGraph.NODE_TITLE_TEXT_Y - title_height
                         );
                         ctx.textAlign = "left";
@@ -721,7 +721,7 @@
                         ctx.textAlign = "left";
                         ctx.fillText(
                             title,
-                            30,// stripe4 + pad4 + icon18 + pad4 right — was title_height
+                            32,// stripe4 + pad6 + icon18 + pad4 right — was title_height
                             LiteGraph.NODE_TITLE_TEXT_Y - title_height
                         );
                     }
