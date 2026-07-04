@@ -88,7 +88,7 @@
     const img = coloredImage(type, color || "#1d1d1d");
     if (!img || !img._ready) return;
     const s = 18 * ((ic && ic.scale) || 1);
-    const x = 4; // 4px left margin from the node's left (title-area) edge
+    const x = 8; // 4px accent stripe + 4px left padding before the icon
     const y = title_height * -0.5 - s * 0.5;
     ctx.drawImage(img, x, y, s, s);
   }
