@@ -1222,6 +1222,24 @@
     '" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
+  // The Toolbox sits below the project title (which is at top:45 + ~22px tall). Start the
+  // panel below that so it never overlaps the title.
+  const TOOLBOX_TOP = 78;
+
+  // Resize a jsPanel so its content fits WITHOUT a scrollbar (clamped to the viewport height).
+  // Measure p.content.scrollHeight (NOT the inner palette div): it already includes the content
+  // padding AND any trailing child margins (e.g. the last palette-group's margin-bottom), which
+  // the palette div's own height omits due to margin-collapse — that undercount left a scrollbar.
+  function fitPanelToContent(p, topOffset) {
+    if (!p || !p.content || typeof p.resize !== "function") return;
+    const hdr = p.querySelector ? p.querySelector(".jsPanel-titlebar") : null;
+    const headerH = hdr ? hdr.offsetHeight : 30;
+    const want = headerH + p.content.scrollHeight + 2; // +2 = panel border
+    const maxH = Math.max(200, window.innerHeight - (topOffset || 0) - 16); // leave a bottom margin
+    const w = parseInt(p.style.width, 10) || 252;
+    try { p.resize({ width: w, height: Math.round(Math.min(want, maxH)) }); } catch (e) { /* ignore */ }
+  }
+
   let toolboxPanel = null;
   function createToolbox() {
     if (typeof jsPanel === "undefined") {
@@ -1234,7 +1252,7 @@
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
       panelSize: { width: 252, height: 500 },
-      position: { my: "left-top", at: "left-top", offsetX: 14, offsetY: 58 },
+      position: { my: "left-top", at: "left-top", offsetX: 14, offsetY: TOOLBOX_TOP }, // left, below the project title
       boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
@@ -1244,6 +1262,15 @@
         host.id = "palette";
         p.content.appendChild(host);
         buildPalette(host);
+        // Fit the height to the palette so no scrollbar shows by default. Content settles in
+        // stages (fonts, then the block-icon <img>s), so re-fit on each: rAF, fonts.ready, and
+        // a ResizeObserver on the palette that catches late reflows (icons loading). No loop —
+        // resizing the panel height doesn't change the palette's own content height.
+        // A saved workspace rect (if any) still overrides this later via applyPanelRect.
+        const fit = () => fitPanelToContent(p, TOOLBOX_TOP);
+        requestAnimationFrame(fit);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+        if (typeof ResizeObserver !== "undefined") new ResizeObserver(fit).observe(host);
       },
     });
   }
