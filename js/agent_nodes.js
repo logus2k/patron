@@ -242,9 +242,8 @@
       // Generic defaults for a FRESH block. The News Agent's concrete values live only in
       // its fixture (examples/news-agent.graph.json), loaded by loadNewsAgent — NOT baked here.
       // The schedule is edited in the DEDICATED Scheduled-Trigger panel (double-click); the
-      // canvas shows only the agent id + a one-line schedule summary. schedule_mode selects
-      // which scheduler trigger kind (cron / interval / date) the fields below drive.
-      this.addProperty("agent_id", "");
+      // canvas shows only a one-line schedule summary. schedule_mode selects which scheduler
+      // trigger kind (cron / interval / date) the fields below drive.
       this.addProperty("schedule_mode", "cron");   // cron | interval | date
       this.addProperty("cron", "0 7 * * *");
       this.addProperty("timezone", "");
@@ -253,7 +252,6 @@
       this.addProperty("run_date", "");
       this.addProperty("task", "");
       this.addProperty("schedule_summary", scheduleSummary(this.properties));
-      textW(this, "agent_id");
       const sw = textW(this, "schedule_summary"); sw.label = "schedule";
       apply(this, INIT);
       // Recompute the summary when a graph is LOADED (configure restores raw properties but

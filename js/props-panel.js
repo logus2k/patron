@@ -442,11 +442,10 @@
     }
   }
 
-  function renderTemplateStudio(onApply) {
-    if (!tplBody || !tplCtx) return;
-    tplBody.innerHTML = "";
-    const node = tplCtx.node, key = tplCtx.key;
-
+  // Build the Template Studio CONTENT — {var} chips + editor + co-author "Improve" footer —
+  // into `host`. Used INLINE in the Prompt tab (control:"template", the merged Studio) and by
+  // the legacy floating panel (renderTemplateStudio). Writes back live via commitValue.
+  function buildTemplateEditor(host, node, key, onApply) {
     // toolbar: {vars} chips derived from the node's input_vars JSON keys
     const bar = document.createElement("div");
     bar.className = "tpl-bar";
@@ -483,8 +482,8 @@
       none.textContent = "(define input_vars to get variable chips)";
       bar.appendChild(none);
     }
-    tplBody.appendChild(bar);
-    tplBody.appendChild(ta);
+    host.appendChild(bar);
+    host.appendChild(ta);
 
     // co-author footer: an instruction + "Improve" → the template_writer LLM rewrites the editor.
     const foot = document.createElement("div");
@@ -522,8 +521,17 @@
     improve.addEventListener("click", runImprove);
     instr.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runImprove(); } });
     foot.appendChild(instr); foot.appendChild(improve); foot.appendChild(status);
-    tplBody.appendChild(foot);
+    host.appendChild(foot);
+    return ta;
+  }
 
+  // Legacy floating Template Studio panel — now UNUSED (the Studio is merged inline into the
+  // Prompt tab, control:"template"). Kept inert so app.js's tplRect persistence stays valid;
+  // nothing opens it anymore. Safe to prune later along with app.js's tpl wiring.
+  function renderTemplateStudio(onApply) {
+    if (!tplBody || !tplCtx) return;
+    tplBody.innerHTML = "";
+    const ta = buildTemplateEditor(tplBody, tplCtx.node, tplCtx.key, onApply);
     setTimeout(() => ta.focus(), 0);
   }
 
@@ -641,24 +649,12 @@
         if (idBox) { idBox.addEventListener("change", () => applyPick(idBox.value)); extra = idBox; }
       }
     } else if (control === "template") {
-      // The important task-prompt field: an inline textarea for quick edits + a button that
-      // opens the Template Studio (a large dedicated editor with {vars} chips).
+      // Merged Template Studio: the full {var}-chips editor + co-author, rendered INLINE here
+      // (was a small textarea + "⤢ Open studio…" button opening a separate panel). The editor
+      // has its own resize grip, and the Agent Configuration panel is resizable for more room.
       input = document.createElement("div");
-      input.className = "pp-picker";
-      const ta = document.createElement("textarea");
-      ta.className = "pp-input pp-area";
-      ta.rows = 3;
-      ta.value = cur == null ? "" : String(cur);
-      if (f.placeholder) ta.placeholder = f.placeholder;
-      const paint = () => { ta.value = String(node.properties[f.key] || ""); };
-      ta.addEventListener("change", () => commitValue(node, f.key, ta.value));
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pp-btn";
-      btn.textContent = "⤢ Open studio…";
-      btn.addEventListener("click", () => openTemplateStudio(node, f.key, paint));
-      input.appendChild(ta);
-      input.appendChild(btn);
+      input.className = "tpl-inline";
+      buildTemplateEditor(input, node, f.key, null);
     } else if (control === "boolean") {
       input = document.createElement("input");
       input.type = "checkbox";
@@ -788,10 +784,9 @@
 
   // Per-block management: a block that maps to a deployed resource gets its management verbs
   // right here in its own (double-click) panel — NOT in a central manager. Keyed by a node
-  // property that identifies the deployed resource (e.g. trigger → scheduler job_id == agent_id).
-  const BLOCK_RESOURCE = {
-    trigger: { resource: "trigger", keyProp: "agent_id" },
-  };
+  // property that identifies the deployed resource. (Empty for now: the legacy trigger→scheduler
+  // job mapping keyed off agent_id, which was removed — the Project uid drives deploy/undeploy.)
+  const BLOCK_RESOURCE = {};
   function addManagementRow(node, container) {
     container = container || body;
     const map = BLOCK_RESOURCE[node.type];
@@ -948,26 +943,20 @@
     const p = node.properties;
     // No block-name heading in the body — the panel title carries "<Block> Configuration".
 
-    // agent id
-    container.appendChild(schField(
-      "agent id (optional label)", "text", p.agent_id,
-      (v) => commitSchedule(node, "agent_id", v.trim()),
-      { placeholder: "optional — the Project uid is the identity" }).wrap);
-
-    // mode segmented control
+    // mode tabs (Cron / Interval / One-off) — same folder-tab look as Agent Configuration
     const mode = p.schedule_mode || "cron";
-    const seg = document.createElement("div"); seg.className = "sch-seg";
+    const tabs = document.createElement("div"); tabs.className = "ac-tabs";
     for (const [val, lbl] of [["cron", "Cron"], ["interval", "Interval"], ["date", "One-off"]]) {
       const b = document.createElement("button"); b.type = "button"; b.textContent = lbl;
-      if (val === mode) b.classList.add("active");
+      b.className = "ac-tab" + (val === mode ? " active" : "");
       b.addEventListener("click", () => {
         if ((p.schedule_mode || "cron") === val) return;
         commitSchedule(node, "schedule_mode", val);
         renderScheduleInto(container, node);  // re-render for the new mode
       });
-      seg.appendChild(b);
+      tabs.appendChild(b);
     }
-    container.appendChild(seg);
+    container.appendChild(tabs);
 
     const sub = document.createElement("div"); sub.className = "sch-sub";
     container.appendChild(sub);
@@ -1099,15 +1088,19 @@
     const position = (r && r.left && r.top)
       ? { my: "left-top", at: "left-top", offsetX: px(r.left), offsetY: px(r.top) }
       : { my: "left-top", at: "left-top", offsetX: 340 + cascade * 26, offsetY: 92 + cascade * 26 };
+    // The Agent block's config is TABBED and carries the inline Template Studio, so it gets a
+    // larger default (600×490) than the flat-list blocks (320×380). A saved rect still wins.
+    const isAgent = node.type === "agent";
     const panelSize = (r && r.width && r.height)
       ? { width: px(r.width) || 320, height: px(r.height) || 380 }
-      : { width: 320, height: 380 };
+      : { width: isAgent ? 600 : 320, height: isAgent ? 490 : 380 };
     const jp = jsPanel.create({
       headerTitle: '<span class="pttxt">' + (node.title || node.type) + ' Configuration</span>',
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
       panelSize: panelSize, position: position, boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       callback: (p) => {
+        p.classList.add("patron-config-panel");  // scopes the block-style close button (css)
         p.content.style.cssText =
           "padding:12px;overflow:auto;background:var(--panel);color:var(--text);font:13px 'Roboto',system-ui,sans-serif";
         renderBlockInto(p.content, node);
@@ -1124,6 +1117,12 @@
       if (c && c.selectNode && cur) { c.selectNode(cur); c.setDirty(true, true); }
     }, true);
     blockPanels[id] = { panel: jp, node: node };
+  }
+
+  // Close a block's Configuration panel (if open) — used when the block itself is deleted.
+  function closeBlockPanelFor(nodeId) {
+    const e = blockPanels[String(nodeId)];
+    if (e && e.panel && e.panel.close) e.panel.close(); // onclosed cleans up blockPanels[id]
   }
 
   // Re-render every open block panel (e.g. after the catalog / resource lists load).
@@ -1183,6 +1182,14 @@
     const canvas = app.canvas;
     loadCatalog();    // fetch the block field metadata (controls) up front
     loadResources();  // fetch the resource catalog (descriptors) for generic resource-ref pickers
+    // Deleting a block closes its Configuration panel too (graph.remove → onNodeRemoved).
+    if (app.graph) {
+      const prevRemoved = app.graph.onNodeRemoved;
+      app.graph.onNodeRemoved = function (node) {
+        if (prevRemoved) prevRemoved.call(this, node);
+        if (node) closeBlockPanelFor(node.id);
+      };
+    }
     if (app.menuBar) {
       app.menuBar.registerCommand("view.properties", toggle);
       app.menuBar.setContext("propsVisible", false);

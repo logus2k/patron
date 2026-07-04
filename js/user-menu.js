@@ -10,7 +10,11 @@
 (function (global) {
   "use strict";
 
-  var SIGN_OUT_URL = "/oauth2/sign_out"; // OAuth2Proxy; a no-op 404 in bare dev (no proxy)
+  // OAuth2Proxy sign-out. The explicit rd is REQUIRED: without it, oauth2-proxy falls back to
+  // the X-Auth-Request-Redirect header (which nginx sets to the current request_uri =
+  // /oauth2/sign_out), so it redirects to itself → ERR_TOO_MANY_REDIRECTS. rd=/patron/ gives a
+  // concrete post-logout target. (Bare dev has no proxy → this 404s, harmless.)
+  var SIGN_OUT_URL = "/oauth2/sign_out?rd=%2Fpatron%2F";
 
   // A stable pastel-ish hue from the email, so each user gets a consistent avatar colour.
   function colorFor(seed) {
@@ -34,7 +38,7 @@
   // A broken/blocked photo falls back to initials (Google photos need no-referrer to load).
   function paintAvatar(el, me) {
     el.textContent = "";
-    el.style.background = colorFor(me.email || me.user);
+    el.style.background = "rgb(207, 207, 207)"; // neutral grey disk (was a per-email hue via colorFor)
     if (me.picture) {
       var img = document.createElement("img");
       img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = me.picture;
@@ -59,10 +63,9 @@
     pop.id = "user-pop";
     pop.hidden = true;
 
+    // Popup shows name + email only — NOT the avatar again (it's already the top-right button).
     var head = document.createElement("div");
     head.className = "up-head";
-    var av2 = document.createElement("span");
-    av2.className = "up-av"; paintAvatar(av2, me);
     var who = document.createElement("div");
     who.className = "up-who";
     var name = realName(me);
@@ -76,18 +79,14 @@
     em.className = name ? "up-email" : "up-name";
     em.textContent = email; em.title = email;
     who.appendChild(em);
-    head.appendChild(av2); head.appendChild(who);
+    head.appendChild(who);
     pop.appendChild(head);
 
     var sep = document.createElement("div"); sep.className = "up-sep"; pop.appendChild(sep);
 
     var out = document.createElement("button");
     out.type = "button"; out.className = "up-logout";
-    out.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-      'stroke-linecap="round" stroke-linejoin="round" width="15" height="15">' +
-      '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
-      '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><span>Log out</span>';
+    out.textContent = "Sign out";
     out.addEventListener("click", function () { global.location.href = SIGN_OUT_URL; });
     pop.appendChild(out);
 

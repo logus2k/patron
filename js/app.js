@@ -1175,8 +1175,9 @@
   menuBar.registerCommand("edit.cut", () => { if (lgcanvas.copyToClipboard) lgcanvas.copyToClipboard(); if (lgcanvas.deleteSelectedNodes) lgcanvas.deleteSelectedNodes(); scheduleSave(); });
   menuBar.registerCommand("edit.duplicate", () => { if (lgcanvas.copyToClipboard) { lgcanvas.copyToClipboard(); lgcanvas.pasteFromClipboard(); scheduleSave(); } });
   // --- Insert (one command per block type → drops at view center) ---
-  ["trigger", "file_initiator", "web_initiator", "stt_initiator", "agent", "rag", "guardrail",
-   "transform", "composite", "whatsapp", "tts", "bus", "file_destination", "web_destination"]
+  ["trigger", "file_initiator", "web_initiator", "stt_initiator", "console_send",
+   "agent", "vector_query", "graph_query", "transform", "composite",
+   "whatsapp", "tts", "bus", "console_receive", "file_destination", "web_destination"]
     .forEach((t) => menuBar.registerCommand("insert." + t, () => insertBlock(t)));
   // --- Build ---
   // Phase 05: Deploy/Undeploy now operate on the whole PROJECT (1:1 → one runtime graph
@@ -1214,12 +1215,13 @@
   // Colored file icon (icons/*.svg) for a panel header.
   const panelImg = (src, size) =>
     '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) +
-    '" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt="">';
+    '" style="vertical-align:bottom;margin-left:3px;margin-right:7px;margin-top:1px;position:relative" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
-  // The Toolbox sits below the project title (which is at top:45 + ~22px tall). Start the
-  // panel below that so it never overlaps the title.
-  const TOOLBOX_TOP = 78;
+  // The Toolbox sits below the project title (which is at top:45 + ~22px tall), nudged
+  // ~30px down + ~30px right from the top-left so it doesn't hug the corner.
+  const TOOLBOX_TOP = 108;   // was 78 (+30 down)
+  const TOOLBOX_LEFT = 44;   // was 14 (+30 right)
 
   // Resize a jsPanel so its content fits WITHOUT a scrollbar (clamped to the viewport height).
   // Measure p.content.scrollHeight (NOT the inner palette div): it already includes the content
@@ -1247,7 +1249,7 @@
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
       panelSize: { width: 252, height: 500 },
-      position: { my: "left-top", at: "left-top", offsetX: 14, offsetY: TOOLBOX_TOP }, // left, below the project title
+      position: { my: "left-top", at: "left-top", offsetX: TOOLBOX_LEFT, offsetY: TOOLBOX_TOP }, // left, below the project title (nudged in ~30px)
       boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
@@ -1282,7 +1284,7 @@
       return;
     }
     outputPanel = jsPanel.create({
-      headerTitle: panelImg("icons/json.svg") + '<span class="pttxt">Output</span>',
+      headerTitle: panelImg("icons/output.svg") + '<span class="pttxt">Output</span>',
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
@@ -1294,6 +1296,15 @@
       callback: (p) => {
         p.content.style.cssText = "padding:10px;overflow:auto;background:var(--panel);color:var(--text)";
         p.content.appendChild(inspectOut);
+        // The header × HIDES the panel (like the View‑menu toggle) and keeps the menu checkbox
+        // in sync — otherwise it stayed checked after close. Capture-phase + stopImmediate keeps
+        // jsPanel's own destroy handler from firing, so the panel is reused on reopen.
+        const x = p.querySelector(".jsPanel-btn-close");
+        if (x) x.addEventListener("click", function (e) {
+          e.preventDefault(); e.stopImmediatePropagation();
+          p.style.display = "none";
+          syncOutputMenu(false);
+        }, true);
       },
     });
     outputPanel.style.display = "none"; // hidden by default — opened via 📄 Output / Compile

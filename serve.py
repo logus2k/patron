@@ -72,10 +72,17 @@ ADMIN_PRINCIPALS = {e.strip() for e in os.environ.get(
 INTERNAL_AUTH_TOKEN = os.environ.get("INTERNAL_AUTH_TOKEN", "")
 
 
-def _can_access(principal, owner):
+def _is_admin(principal, email=None):
+    """Admin membership is matched by EITHER the principal (sub) OR the email. ADMIN_PRINCIPALS
+    stays configured as human-readable EMAILS, so the sole admin keeps access even though the
+    live principal is an opaque Google `sub` (and even before any owner backfill)."""
+    return principal in ADMIN_PRINCIPALS or (email is not None and email in ADMIN_PRINCIPALS)
+
+
+def _can_access(principal, owner, email=None):
     """A principal may access a resource it owns (owner None/legacy → the default principal)
-    or if it is a superuser."""
-    return principal in ADMIN_PRINCIPALS or principal == (owner or DEFAULT_PRINCIPAL)
+    or if it is an admin (matched by sub OR email)."""
+    return _is_admin(principal, email) or principal == (owner or DEFAULT_PRINCIPAL)
 
 
 def _http(method, url, body=None, headers=None):
@@ -224,7 +231,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     # --- multi-tenancy identity (documents/multi_tenancy.md §3) ---
     def _principal(self):
-        """The calling principal from the edge proxy's verified identity, or the default."""
+        """The calling principal = the immutable OIDC ``sub`` (oauth2-proxy's
+        ``X-Auth-Request-User``). Ownership keys on the ``sub`` (never reassigned); the email is
+        display-only (``owner_email``) and the admin-match key (see ``_is_admin``). Precedence:
+        sub → email → default (dev/no-proxy has no sub)."""
         return (self.headers.get("X-Auth-Request-User")
                 or self.headers.get("X-Auth-Request-Email")
                 or DEFAULT_PRINCIPAL)
@@ -284,7 +294,7 @@ class Handler(SimpleHTTPRequestHandler):
         # Multi-tenancy: only the owner (or admin) may update; owner is immutable across saves.
         existing = _proj_read(uid)
         p = self._principal()
-        if existing is not None and not _can_access(p, existing.get("owner")):
+        if existing is not None and not _can_access(p, existing.get("owner"), self._principal_email()):
             return self._json(403, {"ok": False, "error": "not authorized for this project"})
         owner = existing.get("owner") if existing else p
         owner_email = existing.get("owner_email") if existing else self._principal_email()
@@ -311,7 +321,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p0 == PROJECTS_API:
             # Multi-tenancy: list only the caller's projects (admins see all).
             p = self._principal()
-            return self._json(200, {"projects": [x for x in _proj_list() if _can_access(p, x.get("owner"))]})
+            email = self._principal_email()
+            return self._json(200, {"projects": [x for x in _proj_list() if _can_access(p, x.get("owner"), email)]})
         # Phase 05 §9.4 — cross-project asset-usage: which OTHER projects reference an asset id.
         if p0.startswith(ASSET_USAGE_API + "/"):
             return self._asset_usage(p0[len(ASSET_USAGE_API) + 1:])
@@ -322,7 +333,7 @@ class Handler(SimpleHTTPRequestHandler):
             proj = _proj_read(p0[len(PROJECTS_API) + 1:])
             if not proj:
                 return self._json(404, {"ok": False, "error": "no such project"})
-            if not _can_access(self._principal(), proj.get("owner")):
+            if not _can_access(self._principal(), proj.get("owner"), self._principal_email()):
                 return self._json(403, {"ok": False, "error": "not authorized for this project"})
             return self._json(200, proj)
         if self.path.split("?")[0] == COMPOSER_CATALOG:
@@ -446,7 +457,7 @@ class Handler(SimpleHTTPRequestHandler):
             existing = _proj_read(uid)
             if existing is None:
                 return self._json(404, {"ok": False, "error": "no such project"})
-            if not _can_access(self._principal(), existing.get("owner")):
+            if not _can_access(self._principal(), existing.get("owner"), self._principal_email()):
                 return self._json(403, {"ok": False, "error": "not authorized for this project"})
             try:
                 os.remove(_proj_path(uid))

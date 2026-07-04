@@ -132,8 +132,8 @@ html, body {
 
 /* ---- logged-in user: top-right initials avatar + click popup (js/user-menu.js) ---- */
 #user-avatar {
-  position: fixed; top: 8px; right: 14px; z-index: 100001;
-  width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  position: fixed; top: 10px; right: 18px; z-index: 100001;
+  width: 37px; height: 37px; padding: 0; border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.35);
   color: #fff; font: 600 13px "Roboto", system-ui, sans-serif;
   cursor: pointer; pointer-events: auto;
@@ -141,7 +141,7 @@ html, body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 #user-avatar:hover, #user-avatar.open { filter: brightness(1.08); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
-#user-avatar img, #user-pop .up-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+#user-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 #user-pop {
   position: fixed; top: 48px; right: 14px; z-index: 100001;
   width: 232px; padding: 12px; pointer-events: auto;
@@ -151,18 +151,13 @@ html, body {
   font: 13px "Roboto", system-ui, sans-serif;
 }
 #user-pop .up-head { display: flex; align-items: center; gap: 10px; }
-#user-pop .up-av {
-  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
-  color: #fff; font-weight: 600; font-size: 14px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
 #user-pop .up-who { min-width: 0; }
 #user-pop .up-name { font-weight: 600; line-height: 1.2; }
 #user-pop .up-email { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #user-pop .up-sep { height: 1px; background: var(--panel-border); margin: 11px 0; }
 #user-pop .up-logout {
-  width: 100%; display: inline-flex; align-items: center; gap: 8px;
-  padding: 8px 10px; cursor: pointer; text-align: left;
+  width: 100%; display: flex; align-items: center; justify-content: center;
+  padding: 8px 10px; cursor: pointer; text-align: center;
   border: 1px solid var(--panel-border); border-radius: 7px;
   background: var(--bg); color: var(--text); font: inherit;
 }
@@ -290,10 +285,20 @@ html, body {
    js/panel-active.js. !important because jsPanel writes the header background INLINE
    (per-theme white), which a normal rule can't override. */
 .jsPanel.patron-active .jsPanel-hdr { background: var(--panel-title-active) !important; }
-.jsPanel .jsPanel-titlebar { height: 30px; } /* match the litegraph block title height (30px) */
+.jsPanel .jsPanel-titlebar { height: 30px; margin-top: 2px; } /* match the litegraph block title height (30px) */
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 /* jsPanel defaults the title to small-caps — override to normal case. */
 .jsPanel-titlebar .jsPanel-title { font-variant: normal !important; }
+/* Configuration panels (block double-click panels): make the header CLOSE button match the
+   block's "×" badge — a dark translucent circle with a white ×, turning red on hover. */
+.patron-config-panel .jsPanel-btn-close {
+  width: 18px; height: 18px; margin: auto 4px; padding: 0;
+  display: inline-flex !important; align-items: center; justify-content: center;
+  border-radius: 50% !important;
+  background: rgba(0, 0, 0, 0.28) !important; color: #fff !important;
+}
+.patron-config-panel .jsPanel-btn-close:hover { background: rgba(220, 60, 50, 0.95) !important; color: #fff !important; }
+.patron-config-panel .jsPanel-btn-close svg { width: 12px; height: 12px; }
 /* The content fills the panel but has no radius of its own (and our cssText callback wipes
    the inline radius jsPanel sets) → its square corners cover the container's rounded ones.
    Round all four corners to match the panel/node radius (8px). */
@@ -373,16 +378,9 @@ html, body {
 }
 .pp-btn:hover { border-color: var(--accent); }
 
-/* ---- Scheduled Trigger: dedicated scheduler panel (double-click the block) ---------- */
-/* segmented mode selector: Cron | Interval | One-off */
-.sch-seg { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--panel-border);
-  border-radius: 7px; overflow: hidden; }
-.sch-seg button { flex: 1 1 0; padding: 7px 4px; cursor: pointer; border: 0;
-  border-left: 1px solid var(--panel-border); background: var(--bg); color: var(--text);
-  font: 12px "Roboto", system-ui, sans-serif; letter-spacing: .01em; }
-.sch-seg button:first-child { border-left: 0; }
-.sch-seg button:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
-.sch-seg button.active { background: #f28b7d; color: #2a1512; font-weight: 600; }
+/* ---- Scheduled Trigger: dedicated scheduler panel (double-click the block) ----------
+   The Cron / Interval / One-off mode selector reuses the Agent Configuration folder-tabs
+   (.ac-tabs / .ac-tab). */
 /* cron: 5 small labeled boxes in a row */
 .sch-cron { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
 .sch-cron .sch-cell { display: flex; flex-direction: column; gap: 3px; }
@@ -467,6 +465,15 @@ html, body {
   background: var(--panel); color: var(--text);
   font-size: 13px; line-height: 1.5;
 }
+/* Inline Template Studio — the Studio merged into the Prompt tab (see props-panel.js
+   control:"template"). A bordered block that stacks chips / editor / co-author; the editor
+   gets a fixed-but-resizable height (the separate .tpl-editor fills a flex panel, which has
+   no height inline). Resize the Agent Configuration panel itself for more overall room. */
+.tpl-inline {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--panel-border); border-radius: 6px; overflow: hidden;
+}
+.tpl-inline .tpl-editor { flex: 0 0 auto; min-height: 150px; height: 150px; resize: vertical; }
 .tpl-foot {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px; border-top: 1px solid var(--panel-border);
