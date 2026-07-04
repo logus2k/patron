@@ -1099,7 +1099,7 @@
         // Show the block's OWN icon in the header, same spot as on the block's canvas title.
         const src = window.PatronIcons && window.PatronIcons.fileFor(node.type);
         const ico = src ? window.PatronIcons.maskSpan(src, 16,
-          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;") : "";
+          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:1px;") : "";
         return ico + '<span class="pttxt">' + (node.title || node.type) + " Configuration</span>";
       })(),
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",

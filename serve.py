@@ -437,6 +437,10 @@ class Handler(SimpleHTTPRequestHandler):
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/status"):
             uid = p0[len(PROJECTS_API) + 1:-len("/status")]
             return self._project_status(uid)
+        for _verb in ("step", "continue", "stop"):
+            if p0.startswith(PROJECTS_API + "/") and p0.endswith("/" + _verb):
+                uid = p0[len(PROJECTS_API) + 1:-len("/" + _verb)]
+                return self._project_debug(uid, _verb)
         if p0.startswith(UNDEPLOY_API + "/"):
             return self._project_undeploy(p0[len(UNDEPLOY_API) + 1:])
         if self.path.split("?")[0] == COMPOSER_COMPILE:
@@ -531,9 +535,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
 
     def _project_fire(self, uid):
-        """Console Send: manually FIRE a deployed Project. Relays the browser's same-origin
-        POST to the runtime ``POST /admin/projects/<uid>/fire`` with ``{task}`` (the typed
-        message becomes the workflow seed). Requires the project to be deployed."""
+        """Console Send / Trace "Fire (debug)": manually FIRE a deployed Project. Relays the
+        browser's same-origin POST to the runtime ``POST /admin/projects/<uid>/fire`` with
+        ``{task, debug}`` (the typed message becomes the workflow seed; ``debug`` runs it
+        step-by-step). Requires the project to be deployed."""
         if not _UID_RE.match(uid):
             return self._json(400, {"ok": False, "error": "invalid uid"})
         n = int(self.headers.get("Content-Length") or 0)
@@ -542,9 +547,30 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(raw or b"{}")
         except json.JSONDecodeError as e:
             return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
-        payload = {"task": str(body.get("task") or "")}
+        payload = {"task": str(body.get("task") or ""), "debug": bool(body.get("debug"))}
         try:
             status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload, headers=self._farm_headers())
+            return self._json(status, resp if resp is not None else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _project_debug(self, uid, verb):
+        """Debug control: relay ``POST /api/projects/<uid>/{step|continue|stop}`` with ``{cid}``
+        to the runtime's matching endpoint (owner-gated there). Drives a paused debug run."""
+        if not _UID_RE.match(uid) or verb not in ("step", "continue", "stop"):
+            return self._json(400, {"ok": False, "error": "invalid request"})
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            body = json.loads(raw or b"{}")
+        except json.JSONDecodeError as e:
+            return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
+        payload = {"cid": str(body.get("cid") or "")}
+        try:
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/{verb}", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
