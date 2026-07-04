@@ -41,7 +41,7 @@
 :root[data-theme="light"] {
   --bg: #f5f7fa;
   --panel: #ffffff;
-  --panel-border: #d8dee6;
+  --panel-border: #c1c9d5;
   --panel-title-active: #cfe3fb; /* active/selected panel title — light pastel blue (dark text reads on it) */
   --text: #1c2530;
   --muted: #69788a;
@@ -363,19 +363,29 @@ html, body {
 .sch-presets { margin-top: 9px; }
 .sch-sub { margin: 0 0 12px; }
 
-/* ---- Agent Configuration: dedicated TABBED panel (js/agent-config-panel.js) ---------- */
-.ac-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; }
+/* ---- Agent Configuration: dedicated TABBED panel (js/agent-config-panel.js) ----------
+   Styled to match the Agent Runtime admin tabs: outlined folder tabs, rounded top corners,
+   the active tab shown in accent + bold and "connected" to the pane below (its bottom border
+   is the panel colour, lifted -1px over the strip's divider line). */
+.ac-tabs {
+  display: flex; flex-wrap: wrap;
+  padding-left: 6px; margin: 0 0 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
 .ac-tab {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; cursor: pointer;
-  border: 1px solid var(--panel-border); border-radius: 6px;
-  background: var(--bg); color: var(--text);
-  font: 12px "Roboto", system-ui, sans-serif; letter-spacing: .01em;
+  padding: 7px 12px; margin-right: 2px; cursor: pointer;
+  border: 1px solid var(--panel-border); border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--panel); color: var(--text);
+  font: 12px "Roboto", system-ui, sans-serif;
 }
-.ac-tab:hover { border-color: var(--accent); }
-.ac-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ac-tab:hover { color: var(--accent); }
+.ac-tab.active {
+  color: var(--accent); font-weight: 600;
+  margin-bottom: -1px; border-bottom: 1px solid var(--panel); z-index: 1;
+}
 .ac-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
-.ac-tab.active .ac-dot { background: #fff; }
 .ac-pane { display: flex; flex-direction: column; }
 
 /* MCP Tools floating panel: one-line toolbar (filter + Select all/Clear + count) + list */
