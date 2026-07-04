@@ -378,7 +378,11 @@
                     str === "ctrl+v" || str === "ctrl+x" ||
                     str === "ctrl+a"
                 )
-                if (isEditingShortcut && this._isFocusInEditable()) {
+                // In an editable field the field OWNS text-editing keys: the Ctrl set above
+                // AND any bare key (Delete/Backspace/typing). Stealing e.g. Delete here would
+                // delete the selected BLOCK instead of the text in the input. Only modifier
+                // (Ctrl/Cmd) app shortcuts — Ctrl+S, Ctrl+O … — pass through to the menu.
+                if (this._isFocusInEditable() && (isEditingShortcut || (!e.ctrlKey && !e.metaKey))) {
                     return
                 }
 

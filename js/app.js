@@ -931,11 +931,24 @@
   // Called by the ConsoleSend block's Send button (js/agent_nodes.js). Requires the project
   // to be saved AND deployed — /fire targets the live GraphRecord by uid.
   window.PatronConsoleSend = async function (node) {
-    const msg = (node && node.properties && node.properties.message) ? String(node.properties.message) : "";
     if (!currentProject.uid) {
       await window.PatronDialogs.confirm({ title: "Console — Send",
         message: "Save and Deploy this project first.\nSend fires the deployed workflow.", okLabel: "OK" });
       return;
+    }
+    // Write the text to send (pre-filled with the block's current message), then fire. This
+    // keeps typing inside the in-app dialog (Patron has no inline canvas editing).
+    const cur = (node && node.properties && node.properties.message) ? String(node.properties.message) : "";
+    const msg = await window.PatronDialogs.prompt({
+      title: "Console — Send", label: "Message to send", value: cur,
+      multiline: true, okLabel: "Send ▶" });
+    if (msg === null) return;  // cancelled
+    if (node && node.properties) {
+      node.properties.message = msg;
+      const w = (node.widgets || []).find(function (x) { return x.name === "message"; });
+      if (w) w.value = msg;
+      if (window.PatronFitNodeWidth) window.PatronFitNodeWidth(node);
+      if (node.setDirtyCanvas) node.setDirtyCanvas(true, true);
     }
     try {
       const res = await fetch("api/projects/" + currentProject.uid + "/fire", {

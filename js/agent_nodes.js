@@ -165,6 +165,27 @@
   }
   global.PatronDrawField = drawField;
 
+  // A themed ACTION button (e.g. Console Send) — a filled accent pill with a centered label,
+  // instead of litegraph's default (black) button. type "patron/button" routes the draw here
+  // (litegraph's default widget case) and the click to its callback (see inline-edit.js).
+  function drawButton(ctx, node, widget_width, y, H) {
+    const w = this, margin = 15;
+    const x = margin, bw = Math.max(40, widget_width - margin * 2), bh = H - 6, by = y + 3;
+    const accent = node._accent || "#4a90d9";
+    ctx.save();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, by, bw, bh, 6); else ctx.rect(x, by, bw, bh);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "600 " + ((typeof LiteGraph !== "undefined" && LiteGraph.NODE_SUBTEXT_SIZE) || 12) + "px 'Roboto', Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(w.label || w.name || "Send"), x + bw / 2, by + bh / 2);
+    ctx.restore();
+  }
+  global.PatronDrawButton = drawButton;
+
   // Every field renders as a read-only "label  value" row on the canvas (custom drawField —
   // subtle corners, no arrows/dropdown/toggle), because values are edited ONLY in the
   // Properties panel. Each widget carries `editKind` (+ values/min/max) so the panel builds
@@ -284,12 +305,13 @@
     // project-uid lookup lives in app.js (window.PatronConsoleSend); the button just calls it.
     function ConsoleSend() {
       this.addOutput("out", TYPES.FLOW);
-      this.addProperty("agent_id", "");
       this.addProperty("message", "");
       textW(this, "message");
-      this.addWidget("button", "Send ▶", null, () => {
+      const send = this.addWidget("button", "Send ▶", null, () => {
         if (window.PatronConsoleSend) window.PatronConsoleSend(this);
       });
+      send.type = "patron/button";   // themed draw (drawButton) + click routed to callback
+      send.draw = drawButton;
       apply(this, INIT);
     }
     ConsoleSend.title = "Console (Send)";

@@ -754,13 +754,12 @@
     // This is the block's OWN panel (opened by double-clicking the block) — title it by the
     // block, not "Properties" (there is no generic Properties panel anymore).
     if (panel && panel.setHeaderTitle) {
-      panel.setHeaderTitle('<span class="pttxt">' + (node ? (node.title || node.type) : "Block") + '</span>');
+      // Title the panel "<Block> Configuration" so it's easy to tell a config panel from its
+      // block on the canvas. The block name is NOT repeated in the body (it's here already).
+      const nm = node ? (node.title || node.type) : "Block";
+      panel.setHeaderTitle('<span class="pttxt">' + nm + ' Configuration</span>');
     }
     body.innerHTML = "";
-    const h = document.createElement("div");
-    h.className = "pp-title";
-    h.textContent = node ? (node.title || node.type) : "Block";
-    body.appendChild(h);
     if (!node) {
       const m = document.createElement("div");
       m.className = "pp-empty";
@@ -946,9 +945,7 @@
   function renderScheduleInto(container, node) {
     container.innerHTML = "";
     const p = node.properties;
-    const h = document.createElement("div");
-    h.className = "pp-title"; h.textContent = "Scheduled Trigger";
-    container.appendChild(h);
+    // No block-name heading in the body — the panel title carries "<Block> Configuration".
 
     // agent id
     container.appendChild(schField(
@@ -1066,10 +1063,7 @@
   function renderBlockInto(container, node) {
     if (node && node.type === "trigger") { renderScheduleInto(container, node); return; }
     container.innerHTML = "";
-    const h = document.createElement("div");
-    h.className = "pp-title";
-    h.textContent = node.title || node.type;
-    container.appendChild(h);
+    // No block-name heading in the body — the panel title already carries "<Block> Configuration".
     const fields = CATALOG && CATALOG[node.type];
     if (fields && fields.length) {
       preresolveRefs(node, fields);
@@ -1105,7 +1099,7 @@
       ? { width: px(r.width) || 320, height: px(r.height) || 380 }
       : { width: 320, height: 380 };
     const jp = jsPanel.create({
-      headerTitle: '<span class="pttxt">' + (node.title || node.type) + '</span>',
+      headerTitle: '<span class="pttxt">' + (node.title || node.type) + ' Configuration</span>',
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
       panelSize: panelSize, position: position, boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },

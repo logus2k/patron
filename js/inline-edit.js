@@ -34,10 +34,15 @@
       if (x < 6 || x > ww - 12 || w.last_y === undefined || y < w.last_y || y > w.last_y + wh) {
         continue;
       }
-      // A widget is under the pointer. Only select the node; NEVER edit in place (and no
-      // panel on single click — editing is via double-click on the block).
+      // A widget is under the pointer. BUTTON widgets are ACTIONS (e.g. Console Send), not
+      // values — fire their callback instead of routing to the Properties panel. Everything
+      // else: only select the node; NEVER edit in place (editing is via double-click).
       if (event.type === downType) {
-        if (this.selectNode) this.selectNode(node);
+        if (w.type === "button" || w.type === "patron/button") {
+          if (typeof w.callback === "function") w.callback(w, this, node, pos, event);
+        } else if (this.selectNode) {
+          this.selectNode(node);
+        }
       }
       return w; // consume the interaction so litegraph doesn't edit or drag from the widget
     }
