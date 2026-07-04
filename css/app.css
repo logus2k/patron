@@ -36,6 +36,7 @@
   --widget-text2: #999999;
   --link: #9aa9a9;
   --link-highlight: #ffb02e; /* bright amber — pops on dark paper (also the selection border) */
+  --icon-fg: #ffffff;        /* normalized monochrome icon colour on dark surfaces (white) */
 }
 
 :root[data-theme="light"] {
@@ -66,6 +67,7 @@
   --widget-text2: #5f6f80;
   --link: #565d66; /* dark grey — unselected edges on white paper */
   --link-highlight: #f5520c; /* strong orange — pops on light paper (also the selection border) */
+  --icon-fg: #1d1d1d;        /* normalized monochrome icon colour on light surfaces (near-black) */
 }
 
 * { box-sizing: border-box; }
@@ -134,7 +136,7 @@ html, body {
 #user-avatar {
   position: fixed; top: 10px; right: 18px; z-index: 100001;
   width: 37px; height: 37px; padding: 0; border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 0.5px solid rgba(255, 255, 255, 0.35);
   color: #fff; font: 600 13px "Roboto", system-ui, sans-serif;
   cursor: pointer; pointer-events: auto;
   display: inline-flex; align-items: center; justify-content: center;
@@ -281,10 +283,10 @@ html, body {
 /* Panel title TEXT comes down ~4px (the icon + close button stay put). */
 .jsPanel-title .pttxt { position: relative; /* top: 2px; */ }
 .jsPanel .jsPanel-hdr { background: var(--btn-bg); color: var(--text); border-bottom: 1px solid var(--panel-border); border-top-left-radius: 8px; border-top-right-radius: 8px; height: 30px; }
-/* the active (last-clicked / fronted) panel gets a light pastel blue title bar — set via
+/* the active (last-clicked / fronted) panel gets a light amber title bar — set via
    js/panel-active.js. !important because jsPanel writes the header background INLINE
    (per-theme white), which a normal rule can't override. */
-.jsPanel.patron-active .jsPanel-hdr { background: var(--panel-title-active) !important; }
+.jsPanel.patron-active .jsPanel-hdr { background: #ffe5b6 !important; }
 .jsPanel .jsPanel-titlebar { height: 30px; /* margin-top: 2px; */ } /* match the litegraph block title height (30px) */
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 /* jsPanel defaults the title to small-caps — override to normal case. */
@@ -330,7 +332,15 @@ html, body {
 .palette-item:active { cursor: grabbing; }
 .palette-item.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
 .palette-item.disabled:hover { background: none; }
-.palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.palette-item .icon { width: 20px; height: 20px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; } /* no badge — the mask icon inside is themed via --icon-fg */
+/* A monochrome icon rendered as a CSS mask so a currentColor SVG takes --icon-fg (theme-aware),
+   with NO white badge. Used in the toolbox palette + panel headers. */
+.icon-mask {
+  display: inline-block; flex: 0 0 auto; background-color: var(--icon-fg);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
 .palette-item .icon svg, .palette-item .icon img { display: block; } /* size comes from the icon's own width/height (per-icon scale) */
 .palette-item .swatch {
   width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto;

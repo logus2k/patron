@@ -89,7 +89,7 @@
       : { width: 300, height: 360 };
     if (typeof jsPanel !== "undefined") {
       panel = jsPanel.create({
-        headerTitle: '<img src="icons/table.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Properties</span>',
+        headerTitle: window.PatronIcons.maskSpan("icons/table.svg", 16, "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;") + '<span class="pttxt">Properties</span>',
         theme: "none",
         borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
         border: "1px solid var(--panel-border)",
@@ -224,7 +224,7 @@
       : { my: "center", at: "center", offsetX: 0, offsetY: 20 };
     if (typeof jsPanel !== "undefined") {
       mcpPanel = jsPanel.create({
-        headerTitle: '<img src="icons/connectors.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">MCP Tools</span>',
+        headerTitle: window.PatronIcons.maskSpan("icons/connectors.svg", 16, "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;") + '<span class="pttxt">MCP Tools</span>',
         theme: "none",
         borderRadius: "8px",
         border: "1px solid var(--panel-border)",
@@ -410,7 +410,7 @@
       : { my: "center", at: "center", offsetX: 0, offsetY: 20 };
     if (typeof jsPanel !== "undefined") {
       tplPanel = jsPanel.create({
-        headerTitle: '<img src="icons/chat-bubble-text-square.svg" width="16" height="16" style="vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px" alt=""><span class="pttxt">Template Studio</span>',
+        headerTitle: window.PatronIcons.maskSpan("icons/chat-bubble-text-square.svg", 16, "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;") + '<span class="pttxt">Template Studio</span>',
         theme: "none",
         borderRadius: "8px",
         border: "1px solid var(--panel-border)",
@@ -1095,7 +1095,13 @@
       ? { width: px(r.width) || 320, height: px(r.height) || 380 }
       : { width: isAgent ? 600 : 320, height: isAgent ? 490 : 380 };
     const jp = jsPanel.create({
-      headerTitle: '<span class="pttxt">' + (node.title || node.type) + ' Configuration</span>',
+      headerTitle: (function () {
+        // Show the block's OWN icon in the header, same spot as on the block's canvas title.
+        const src = window.PatronIcons && window.PatronIcons.fileFor(node.type);
+        const ico = src ? window.PatronIcons.maskSpan(src, 16,
+          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;") : "";
+        return ico + '<span class="pttxt">' + (node.title || node.type) + " Configuration</span>";
+      })(),
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
       panelSize: panelSize, position: position, boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },

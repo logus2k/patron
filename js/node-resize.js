@@ -20,26 +20,44 @@
 
   if (typeof LGraphCanvas === "undefined") { console.error("node-resize.js: LGraphCanvas missing (load after litegraph.js, before app.js)"); return; }
 
-  const EDGE_PX = 8;            // screen-px hot-zone around a node's left/right border
-  let active = null;           // { lgc, node, mode:'l'|'r', fixedRight } while resizing
+  const EDGE_PX = 8;            // screen-px hot-zone around a node's left/right/bottom border
+  const CORNER_PX = 16;        // bigger hot-zone at the bottom CORNERS (diagonal both-dim resize)
+  let active = null;           // { lgc, node, mode:'l'|'r'|'b'|'br'|'bl', fixedRight } while resizing
 
   function edgePx(lgc) { return EDGE_PX / (lgc.ds ? lgc.ds.scale : 1); }
+  function cornerPx(lgc) { return CORNER_PX / (lgc.ds ? lgc.ds.scale : 1); }
 
-  // Returns 'l' | 'r' | 'b' | null for the left/right (width) or bottom (height) resize zone at
-  // graph point (x,y) on node. Excludes the title (move) and any slot hit-zone (connect).
+  // The cursor for a resize mode: single-axis edges get ew/ns; the bottom corners get the
+  // diagonal ↘ (nwse for bottom-RIGHT) / ↙ (nesw for bottom-LEFT).
+  function cursorFor(mode) {
+    if (mode === "b") return "ns-resize";
+    if (mode === "br") return "nwse-resize";
+    if (mode === "bl") return "nesw-resize";
+    return "ew-resize"; // 'l' | 'r'
+  }
+
+  // Returns 'br' | 'bl' | 'l' | 'r' | 'b' | null for the bottom-corner (both dims) / left-right
+  // (width) / bottom (height) resize zone at graph point (x,y) on node. Corners are checked FIRST
+  // and use a bigger radius, so grabbing a corner is easy and wins over the single-axis edges.
+  // Excludes the title (move) and any slot hit-zone (connect). Top corners = the drag title bar.
   function edgeZone(lgc, node, x, y) {
     if (!node || node.resizable === false || (node.flags && node.flags.collapsed)) return null;
     if (node.getSlotInPosition && node.getSlotInPosition(x, y)) return null; // it's a slot → connect
-    const e = edgePx(lgc);
+    const e = edgePx(lgc), c = cornerPx(lgc);
+    const left = node.pos[0], right = node.pos[0] + node.size[0];
+    const top = node.pos[1], bottom = node.pos[1] + node.size[1];
+    // Bottom CORNERS first (diagonal, resize WIDTH + HEIGHT) — a generous square around each corner.
+    if (y > top && Math.abs(y - bottom) < c) {
+      if (Math.abs(x - right) < c) return "br";
+      if (Math.abs(x - left) < c) return "bl";
+    }
     // left/right edges (WIDTH) — within the body height only, not the title
-    const inBodyY = y > node.pos[1] && y < node.pos[1] + node.size[1];
-    if (inBodyY) {
-      if (Math.abs(x - node.pos[0]) < e) return "l";
-      if (Math.abs(x - (node.pos[0] + node.size[0])) < e) return "r";
+    if (y > top && y < bottom) {
+      if (Math.abs(x - left) < e) return "l";
+      if (Math.abs(x - right) < e) return "r";
     }
     // bottom edge (HEIGHT) — within the node's horizontal span
-    const inX = x > node.pos[0] - e && x < node.pos[0] + node.size[0] + e;
-    if (inX && Math.abs(y - (node.pos[1] + node.size[1])) < e) return "b";
+    if (x > left - e && x < right + e && Math.abs(y - bottom) < e) return "b";
     return null;
   }
 
@@ -54,9 +72,18 @@
     } else if (active.mode === "r") {
       const w = Math.max(min[0], co[0] - node.pos[0]);
       node.setSize([w, node.size[1]]);
-    } else { // "b" — HEIGHT from the bottom edge
+    } else if (active.mode === "b") {                   // HEIGHT from the bottom edge
       const h = Math.max(min[1], co[1] - node.pos[1]);
       node.setSize([node.size[0], h]);                  // onResize clamps height to >= content
+    } else if (active.mode === "br") {                  // bottom-RIGHT corner — width + height
+      const w = Math.max(min[0], co[0] - node.pos[0]);
+      const h = Math.max(min[1], co[1] - node.pos[1]);
+      node.setSize([w, h]);
+    } else {                                            // "bl" — bottom-LEFT corner — width (pin right) + height
+      const w = Math.max(min[0], active.fixedRight - co[0]);
+      const h = Math.max(min[1], co[1] - node.pos[1]);
+      node.setSize([w, h]);
+      node.pos[0] = active.fixedRight - node.size[0];   // keep the right edge pinned
     }
     lgc.setDirty(true, true);
     ev.preventDefault();
@@ -66,14 +93,14 @@
     window.removeEventListener("pointerup", endResize, true);
     const lgc = active.lgc, node = active.node, mode = active.mode;
     active = null;
-    if (lgc.canvas) lgc.canvas.style.cursor = mode === "b" ? "ns-resize" : "ew-resize";
+    if (lgc.canvas) lgc.canvas.style.cursor = cursorFor(mode);
     if (lgc.graph && lgc.graph.afterChange) lgc.graph.afterChange(node);
     if (window.PatronApp && window.PatronApp.scheduleSave) window.PatronApp.scheduleSave();
   }
   function startResize(lgc, node, mode) {
     if (lgc.graph && lgc.graph.beforeChange) lgc.graph.beforeChange();
     active = { lgc, node, mode, fixedRight: node.pos[0] + node.size[0] };
-    if (lgc.canvas) lgc.canvas.style.cursor = mode === "b" ? "ns-resize" : "ew-resize";
+    if (lgc.canvas) lgc.canvas.style.cursor = cursorFor(mode);
     window.addEventListener("pointermove", applyResize, true);
     window.addEventListener("pointerup", endResize, true);
   }
@@ -109,7 +136,7 @@
   LGraphCanvas.prototype.processMouseMove = function (e) {
     const r = _move.apply(this, arguments); // litegraph sets e.canvasX/Y + its own cursor
     if (!this.canvas) return r;
-    if (active) { this.canvas.style.cursor = active.mode === "b" ? "ns-resize" : "ew-resize"; return r; }
+    if (active) { this.canvas.style.cursor = cursorFor(active.mode); return r; }
     if (this.node_dragged) { this.canvas.style.cursor = "move"; return r; }
     if (!this.connecting_node && !this.dragging_canvas && this.graph) {
       const node = this.graph.getNodeOnPos(e.canvasX, e.canvasY, this.visible_nodes);
@@ -119,7 +146,7 @@
         if (onSlot) {
           this.canvas.style.cursor = "crosshair";              // slot → connect affordance
         } else if (zone) {
-          this.canvas.style.cursor = zone === "b" ? "ns-resize" : "ew-resize"; // bottom → height, L/R → width
+          this.canvas.style.cursor = cursorFor(zone); // corners → diagonal, bottom → height, L/R → width
         } else if (inTitle(node, e.canvasY)) {
           this.canvas.style.cursor = "move";                   // title bar → draggable
         } else {

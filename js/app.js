@@ -1213,15 +1213,18 @@
   }
 
   // Colored file icon (icons/*.svg) for a panel header.
+  // Panel-header icon: a themed CSS-mask span (var(--icon-fg)) — legible on both themes, no badge.
   const panelImg = (src, size) =>
-    '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) +
-    '" style="vertical-align:bottom;margin-left:3px;margin-right:7px;margin-top:1px;position:relative" alt="">';
+    (window.PatronIcons && window.PatronIcons.maskSpan)
+      ? window.PatronIcons.maskSpan(src, size || 16,
+          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;")
+      : '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) + '" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
-  // The Toolbox sits below the project title (which is at top:45 + ~22px tall), nudged
-  // ~30px down + ~30px right from the top-left so it doesn't hug the corner.
-  const TOOLBOX_TOP = 108;   // was 78 (+30 down)
-  const TOOLBOX_LEFT = 44;   // was 14 (+30 right)
+  // The Toolbox defaults to the TOP-RIGHT (below the menu bar), inset from the corner so it
+  // doesn't hug the edge. Same margins as before, just mirrored to the right side.
+  const TOOLBOX_TOP = 108;    // distance from the top
+  const TOOLBOX_MARGIN = 44;  // distance from the (right) edge
 
   // Resize a jsPanel so its content fits WITHOUT a scrollbar (clamped to the viewport height).
   // Measure p.content.scrollHeight (NOT the inner palette div): it already includes the content
@@ -1249,7 +1252,7 @@
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
       panelSize: { width: 252, height: 500 },
-      position: { my: "left-top", at: "left-top", offsetX: TOOLBOX_LEFT, offsetY: TOOLBOX_TOP }, // left, below the project title (nudged in ~30px)
+      position: { my: "right-top", at: "right-top", offsetX: -TOOLBOX_MARGIN, offsetY: TOOLBOX_TOP }, // top-right, inset from the corner
       boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
       addCloseControl: 0,
