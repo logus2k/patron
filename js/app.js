@@ -152,44 +152,6 @@
     if (graph.arrange) graph.arrange();
     lgcanvas.setDirty(true, true); fitView(); scheduleSave();
   }
-  function alignSelected(direction) {
-    const s = selectedNodes(); if (s.length < 2 || !global.LGraphCanvas) return;
-    global.LGraphCanvas.active_canvas = lgcanvas;
-    global.LGraphCanvas.alignNodes(s, direction);
-    lgcanvas.setDirty(true, true); scheduleSave();
-  }
-  function addGroup() {
-    if (!(global.LiteGraph && global.LiteGraph.LGraphGroup)) return;
-    const g = new global.LiteGraph.LGraphGroup("Group");
-    const ds = lgcanvas.ds, rect = canvasRect();
-    const cx = rect.width / (2 * ds.scale) - ds.offset[0];
-    const cy = rect.height / (2 * ds.scale) - ds.offset[1];
-    g.pos = [cx - 150, cy - 110]; g.size = [300, 220];
-    graph.add(g); lgcanvas.setDirty(true, true); scheduleSave();
-  }
-
-  // ---- mode toggles (persisted): lock / snap / link style / arrows -------------
-  let canvasLocked = false, snapGrid = false, curvedLinks = true, linkArrows = false;
-  function applyLock(v) {
-    canvasLocked = v; lgcanvas.read_only = v;          // view-only: no node moves/edits; pan+zoom stay
-    if (menuBar) { menuBar.setContext("canvasLocked", v); if (menuBar.refresh) menuBar.refresh(); }
-  }
-  function applySnap(v) {
-    snapGrid = v; lgcanvas.align_to_grid = v;          // nodes snap to CANVAS_GRID_SIZE on drop
-    if (menuBar) { menuBar.setContext("snapGrid", v); if (menuBar.refresh) menuBar.refresh(); }
-  }
-  function applyLinks() {
-    lgcanvas.links_render_mode = curvedLinks
-      ? global.LiteGraph.SPLINE_LINK : global.LiteGraph.STRAIGHT_LINK;
-    lgcanvas.render_connection_arrows = linkArrows;
-    lgcanvas.setDirty(true, true);
-    if (menuBar) {
-      menuBar.setContext("curvedLinks", curvedLinks);
-      menuBar.setContext("linkArrows", linkArrows);
-      if (menuBar.refresh) menuBar.refresh();
-    }
-  }
-
   // ---- inline SVG icons (currentColor → theme-aware) ---------------------------
   const svg = (inner) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
@@ -649,13 +611,9 @@
         },
         blockRects: window.PatronApp.blockRects || {}, // per-block dedicated-panel positions
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
-        // Canvas-controls state (3 modes = visible × pinned) + canvas display toggles.
+        // Canvas-controls state: 3 modes = visible × pinned.
         controlsVisible: controlsVisible,
         controlsPinned: controlsPinned,
-        canvasLocked: canvasLocked,
-        snapGrid: snapGrid,
-        curvedLinks: curvedLinks,
-        linkArrows: linkArrows,
       },
     };
   }
@@ -721,15 +679,10 @@
     const tplEl = window.PatronProps && window.PatronProps.tplPanel ? window.PatronProps.tplPanel() : null;
     if (tplEl) applyPanelRect(tplEl, panels.tpl);
     if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
-    // Canvas-controls state (defaults: visible, unpinned, unlocked, no snap, curved links).
-    // Back-compat: an old workspace with only `zoomVisible` maps to controlsVisible.
+    // Canvas-controls state (defaults: visible, unpinned). Back-compat: an old workspace
+    // with only `zoomVisible` maps to controlsVisible.
     controlsVisible = ui.controlsVisible !== undefined ? !!ui.controlsVisible : (ui.zoomVisible !== false);
     controlsPinned = !!ui.controlsPinned;
-    curvedLinks = ui.curvedLinks !== false;
-    linkArrows = !!ui.linkArrows;
-    applyLock(!!ui.canvasLocked);
-    applySnap(!!ui.snapGrid);
-    applyLinks();
     if (menuBar) {
       menuBar.setContext("controlsVisible", controlsVisible);
       menuBar.setContext("controlsPinned", controlsPinned);
@@ -918,10 +871,6 @@
   menuBar.setContext("toolboxVisible", true);
   menuBar.setContext("controlsVisible", true);
   menuBar.setContext("controlsPinned", false);
-  menuBar.setContext("canvasLocked", false);
-  menuBar.setContext("snapGrid", false);
-  menuBar.setContext("curvedLinks", true);
-  menuBar.setContext("linkArrows", false);
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
@@ -1176,8 +1125,11 @@
     const es = new EventSource("api/projects/" + currentProject.uid + "/events");
     es.onmessage = function (e) {
       let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (!d || !d.node) return;
-      // d.node is "console_receive:<litegraph id>" — match the node on canvas.
+      if (!d) return;
+      // Feed EVERY event to the live Trace panel (all event types, grouped by run).
+      if (window.PatronTrace && window.PatronTrace.push) window.PatronTrace.push(d);
+      // Console (Receive): only console.output events route to a console_receive node.
+      if (d.event !== "console.output" || !d.node) return;
       const node = graph.getNodeById(Number(String(d.node).split(":").pop()));
       if (!node || node.type !== "console_receive") return;
       node.properties.received = String(d.output == null ? "" : d.output);
@@ -1241,25 +1193,12 @@
   menuBar.registerCommand("view.controls", toggleControls);
   menuBar.registerCommand("view.pinControls", () => setPinned(!controlsPinned));
   menuBar.registerCommand("view.output", toggleOutput);
+  menuBar.registerCommand("view.trace", () => { if (window.PatronTrace) window.PatronTrace.toggle(); });
   menuBar.registerCommand("theme.dark", () => { applyTheme("dark"); scheduleSave(); });
   menuBar.registerCommand("theme.white", () => { applyTheme("light"); scheduleSave(); });
   menuBar.registerCommand("view.zoomIn", () => setZoom((lgcanvas.ds.scale || 1) * 1.1));
   menuBar.registerCommand("view.zoomOut", () => setZoom((lgcanvas.ds.scale || 1) / 1.1));
   menuBar.registerCommand("view.resetZoom", () => setZoom(1));
-  menuBar.registerCommand("view.fit", fitView);
-  menuBar.registerCommand("view.center", centerView);
-  menuBar.registerCommand("view.fitSelection", fitSelection);
-  menuBar.registerCommand("view.arrange", arrangeGraph);
-  menuBar.registerCommand("view.find", openFind);
-  menuBar.registerCommand("view.addGroup", addGroup);
-  menuBar.registerCommand("view.alignLeft", () => alignSelected("left"));
-  menuBar.registerCommand("view.alignRight", () => alignSelected("right"));
-  menuBar.registerCommand("view.alignTop", () => alignSelected("top"));
-  menuBar.registerCommand("view.alignBottom", () => alignSelected("bottom"));
-  menuBar.registerCommand("view.lock", () => { applyLock(!canvasLocked); scheduleSave(); });
-  menuBar.registerCommand("view.snap", () => { applySnap(!snapGrid); scheduleSave(); });
-  menuBar.registerCommand("view.curved", () => { curvedLinks = !curvedLinks; applyLinks(); scheduleSave(); });
-  menuBar.registerCommand("view.arrows", () => { linkArrows = !linkArrows; applyLinks(); scheduleSave(); });
   // --- Help ---
   menuBar.registerCommand("help.about", showAbout);
   // --- Planned (stubs — announce, don't crash) ---

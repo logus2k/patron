@@ -42,13 +42,14 @@
   }
 
   // Re-fit after a value changes: GROW the node to fit a longer value, but never SHRINK
-  // below the width the user manually set (shrinking-to-content on every edit is the bug
-  // where a widened block snaps back to minimum). Height always tracks content.
+  // below the size the user manually set (shrinking-to-content on every edit is the bug
+  // where a widened/heightened block snaps back to minimum). Both dimensions grow to fit
+  // content but keep a user-set larger width OR height.
   function refitNode(node) {
     if (!node || !node.widgets) return;
     const want = node.computeSize();
     if (!node.size) node.size = want;
-    else { node.size[0] = Math.max(node.size[0], want[0]); node.size[1] = want[1]; }
+    else { node.size[0] = Math.max(node.size[0], want[0]); node.size[1] = Math.max(node.size[1], want[1]); }
     if (node.setDirtyCanvas) node.setDirtyCanvas(true, true);
   }
   global.PatronFitNodeWidth = refitNode;
@@ -66,7 +67,7 @@
     };
     node.onResize = function (size) {
       size[0] = Math.max(contentWidth(this), Math.min(size[0], MAX_W));
-      size[1] = this.computeSize()[1];
+      size[1] = Math.max(size[1], this.computeSize()[1]); // allow taller than content; never shorter
     };
     node.configure = function (info) {
       baseConfigure.call(this, info);
@@ -74,7 +75,7 @@
       syncWidgets(this);          // show loaded values, not constructor defaults
       if (this.size) {
         this.size[0] = Math.min(MAX_W, Math.max(this.size[0], contentWidth(this)));
-        this.size[1] = this.computeSize()[1];
+        this.size[1] = Math.max(this.size[1], this.computeSize()[1]); // keep a saved taller height
       }
     };
     node.size = node.computeSize();

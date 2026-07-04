@@ -62,12 +62,30 @@ RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstri
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
 SCHEDULER_URL = os.environ.get("AGENT_SCHEDULER_URL", "http://127.0.0.1:6816").rstrip("/")
 
+# --- Multi-tenancy (documents/multi_tenancy.md §3) ---
+# The principal used when the edge proxy hasn't injected an identity (dev / direct access).
+DEFAULT_PRINCIPAL = os.environ.get("DEFAULT_PRINCIPAL", "logus2k@gmail.com")
+# Superusers (bypass ownership). Comma-separated principals.
+ADMIN_PRINCIPALS = {e.strip() for e in os.environ.get(
+    "ADMIN_PRINCIPALS", "logus2k@gmail.com").split(",") if e.strip()}
+# Shared secret sent to the farm so it trusts our X-Patron-User header (empty = dev).
+INTERNAL_AUTH_TOKEN = os.environ.get("INTERNAL_AUTH_TOKEN", "")
 
-def _http(method, url, body=None):
-    """Tiny JSON HTTP helper. Returns (status, parsed-json|None); raises HTTPError/URLError."""
+
+def _can_access(principal, owner):
+    """A principal may access a resource it owns (owner None/legacy → the default principal)
+    or if it is a superuser."""
+    return principal in ADMIN_PRINCIPALS or principal == (owner or DEFAULT_PRINCIPAL)
+
+
+def _http(method, url, body=None, headers=None):
+    """Tiny JSON HTTP helper. Returns (status, parsed-json|None); raises HTTPError/URLError.
+    ``headers`` forwards the caller identity (X-Patron-User …) to the runtime."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    headers = {"Content-Type": "application/json"} if data is not None else {}
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    hdrs = {"Content-Type": "application/json"} if data is not None else {}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
     with urllib.request.urlopen(req, timeout=10) as resp:
         raw = resp.read()
         return resp.status, (json.loads(raw) if raw else None)
@@ -90,7 +108,8 @@ def _proj_list():
                     p = json.load(f)
                 out.append({"uid": p.get("uid"), "name": p.get("name"),
                             "description": p.get("description", ""),
-                            "updated": p.get("updated"), "version": p.get("version", 0)})
+                            "updated": p.get("updated"), "version": p.get("version", 0),
+                            "owner": p.get("owner")})
             except (json.JSONDecodeError, OSError):
                 continue
     return out
@@ -153,7 +172,7 @@ def _asset_usage_index(exclude_uid=None):
     return index
 
 
-def _proj_from_body(uid, body):
+def _proj_from_body(uid, body, owner=None, owner_email=None):
     return {
         "uid": uid,
         "name": (body.get("name") or "Untitled Project").strip() or "Untitled Project",
@@ -161,12 +180,31 @@ def _proj_from_body(uid, body):
         "version": int(body.get("version") or 0),
         "graph": body.get("graph") or {},
         "ui": body.get("ui") or {},
+        "owner": owner,
+        "owner_email": owner_email,
     }
 
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=ROOT, **k)
+
+    # --- multi-tenancy identity (documents/multi_tenancy.md §3) ---
+    def _principal(self):
+        """The calling principal from the edge proxy's verified identity, or the default."""
+        return (self.headers.get("X-Auth-Request-User")
+                or self.headers.get("X-Auth-Request-Email")
+                or DEFAULT_PRINCIPAL)
+
+    def _principal_email(self):
+        return self.headers.get("X-Auth-Request-Email") or ""
+
+    def _farm_headers(self):
+        """Identity headers forwarded to the runtime on server-to-server calls."""
+        h = {"X-Patron-User": self._principal(), "X-Patron-Email": self._principal_email()}
+        if INTERNAL_AUTH_TOKEN:
+            h["X-Internal-Auth"] = INTERNAL_AUTH_TOKEN
+        return h
 
     def end_headers(self):
         # Never let the browser (or a proxy) cache the editor's HTML/JS/CSS — a stale build in
@@ -200,7 +238,9 @@ class Handler(SimpleHTTPRequestHandler):
         uid = body.get("uid") or uuid.uuid4().hex[:12]
         if not _UID_RE.match(uid):
             return self._json(400, {"ok": False, "error": "invalid uid"})
-        return self._json(201, _proj_write(_proj_from_body(uid, body)))
+        # Multi-tenancy: the creator owns the new project.
+        p = self._principal()
+        return self._json(201, _proj_write(_proj_from_body(uid, body, owner=p, owner_email=self._principal_email())))
 
     def _project_put(self, uid):
         if not _UID_RE.match(uid):
@@ -208,12 +248,21 @@ class Handler(SimpleHTTPRequestHandler):
         body = self._read_json()
         if body is None:
             return
-        return self._json(200, _proj_write(_proj_from_body(uid, body)))
+        # Multi-tenancy: only the owner (or admin) may update; owner is immutable across saves.
+        existing = _proj_read(uid)
+        p = self._principal()
+        if existing is not None and not _can_access(p, existing.get("owner")):
+            return self._json(403, {"ok": False, "error": "not authorized for this project"})
+        owner = existing.get("owner") if existing else p
+        owner_email = existing.get("owner_email") if existing else self._principal_email()
+        return self._json(200, _proj_write(_proj_from_body(uid, body, owner=owner or p, owner_email=owner_email)))
 
     def do_GET(self):
         p0 = self.path.split("?")[0]
         if p0 == PROJECTS_API:
-            return self._json(200, {"projects": _proj_list()})
+            # Multi-tenancy: list only the caller's projects (admins see all).
+            p = self._principal()
+            return self._json(200, {"projects": [x for x in _proj_list() if _can_access(p, x.get("owner"))]})
         # Phase 05 §9.4 — cross-project asset-usage: which OTHER projects reference an asset id.
         if p0.startswith(ASSET_USAGE_API + "/"):
             return self._asset_usage(p0[len(ASSET_USAGE_API) + 1:])
@@ -222,15 +271,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._project_events(p0[len(PROJECTS_API) + 1:-len("/events")])
         if p0.startswith(PROJECTS_API + "/"):
             proj = _proj_read(p0[len(PROJECTS_API) + 1:])
-            return self._json(200, proj) if proj else self._json(404, {"ok": False, "error": "no such project"})
-        if self.path.split("?")[0] == API:
-            if os.path.exists(WORKSPACE):
-                try:
-                    with open(WORKSPACE, "r", encoding="utf-8") as f:
-                        return self._json(200, json.load(f))
-                except (json.JSONDecodeError, OSError):
-                    pass
-            return self._json(200, {})  # no/corrupt workspace -> empty
+            if not proj:
+                return self._json(404, {"ok": False, "error": "no such project"})
+            if not _can_access(self._principal(), proj.get("owner")):
+                return self._json(403, {"ok": False, "error": "not authorized for this project"})
+            return self._json(200, proj)
         if self.path.split("?")[0] == COMPOSER_CATALOG:
             return self._proxy_get(f"{RUNTIME_URL}{COMPOSER_CATALOG}")
         if self.path.split("?")[0] == WA_TARGETS:
@@ -252,7 +297,11 @@ class Handler(SimpleHTTPRequestHandler):
         if not _UID_RE.match(uid):
             return self._json(400, {"ok": False, "error": "invalid uid"})
         try:
-            upstream = urllib.request.urlopen(f"{RUNTIME_URL}/admin/projects/{uid}/events")
+            req = urllib.request.Request(f"{RUNTIME_URL}/admin/projects/{uid}/events",
+                                         headers=self._farm_headers())  # forward identity
+            upstream = urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}"})
         except urllib.error.URLError as e:
             return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime: {e.reason}"})
         self.send_response(200)
@@ -288,19 +337,8 @@ class Handler(SimpleHTTPRequestHandler):
         p0 = self.path.split("?")[0]
         if p0.startswith(PROJECTS_API + "/"):
             return self._project_put(p0[len(PROJECTS_API) + 1:])
-        if self.path.split("?")[0] == API:
-            n = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(n) if n else b"{}"
-            try:
-                data = json.loads(raw or b"{}")
-            except json.JSONDecodeError as e:
-                return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
-            os.makedirs(DATA, exist_ok=True)
-            tmp = WORKSPACE + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp, WORKSPACE)  # atomic
-            return self._json(200, {"ok": True})
+        # /api/workspace is DROPPED (multi_tenancy.md §9.3): auto-save is gone and boot no
+        # longer reads it, so the global workspace store is removed.
         # Resource model update: PUT /resources/{id}/{key}.
         if self.path.split("?")[0].startswith("/resources/"):
             return self._proxy_put(f"{RUNTIME_URL}{self.path}")
@@ -353,6 +391,11 @@ class Handler(SimpleHTTPRequestHandler):
             uid = p0[len(PROJECTS_API) + 1:]
             if not _UID_RE.match(uid):
                 return self._json(400, {"ok": False, "error": "invalid uid"})
+            existing = _proj_read(uid)
+            if existing is None:
+                return self._json(404, {"ok": False, "error": "no such project"})
+            if not _can_access(self._principal(), existing.get("owner")):
+                return self._json(403, {"ok": False, "error": "not authorized for this project"})
             try:
                 os.remove(_proj_path(uid))
                 return self._json(200, {"ok": True})
@@ -416,7 +459,7 @@ class Handler(SimpleHTTPRequestHandler):
             composition = {"nodes": body.get("nodes") or [], "links": body.get("links") or []}
         payload = {"name": name or "Untitled Project", "composition": composition}
         try:
-            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/deploy", payload)
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/deploy", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
@@ -438,7 +481,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
         payload = {"task": str(body.get("task") or "")}
         try:
-            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload)
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
@@ -453,7 +496,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not _UID_RE.match(uid):
             return self._json(400, {"ok": False, "error": "invalid uid"})
         try:
-            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/undeploy", {})
+            status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/undeploy", {}, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
