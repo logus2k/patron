@@ -446,19 +446,25 @@
     Composite.title = "Workflow";
     Composite.desc = "A saved workflow referenced as one participant (nesting).";
 
-    // --- Data (JSON): emit a literal JSON object -----------------------------
-    // A general flow SOURCE (out only). Wire its out into an Agent's `vars` input to set the
-    // Agent's named template variables ({topic}, {n}); the compiler folds an inline Data block
-    // into the Agent's input.vars at deploy. Its content is edited in the Properties panel
-    // (control="json" from /composer/catalog).
+    // --- Data (JSON): emit a JSON object -------------------------------------
+    // A general flow SOURCE (out only). `source=inline` emits the literal `content`;
+    // `source=file` loads `path` off the RUNTIME filesystem at run time (same trust model as
+    // the File Initiator — no browser upload). Wire its out into an Agent's `vars` input to set
+    // the Agent's named template variables ({topic}, {n}); an INLINE Data block wired to `vars`
+    // is folded into the Agent's input.vars at deploy, a FILE source is pulled at runtime.
+    // Edited in the Properties panel (source=combo, content=json, path=text from /composer/catalog).
     function DataBlock() {
       this.addOutput("out", TYPES.FLOW);
+      this.addProperty("source", "inline");   // inline | file
       this.addProperty("content", "{}");
+      this.addProperty("path", "");
+      comboW(this, "source", ["inline", "file"]);
       textW(this, "content");
+      textW(this, "path");
       apply(this, COLOR);
     }
     DataBlock.title = "JSON";
-    DataBlock.desc = "Emit a literal JSON object. Wire into an Agent's 'vars' input to set its variables; also a general flow source.";
+    DataBlock.desc = "Emit a JSON object (inline literal or a runtime file). Wire into an Agent's 'vars' input to set its variables; also a general flow source.";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
     function destination(channel, defaultTarget, targetLabel, withOutput) {

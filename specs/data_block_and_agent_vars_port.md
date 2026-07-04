@@ -1,6 +1,11 @@
 # Spec — Data (JSON) Block + Agent `vars` Port
 
-**Status:** PHASE 1 IMPLEMENTED & live-verified · 2026-07-04 (Phase 2 dynamic-file/port-aware-IR deferred)
+**Status:** PHASE 1 & PHASE 2 IMPLEMENTED · 2026-07-04 (243 tests green; live-verify pending a container rebuild).
+Phase 2 delivered: block renamed **JSON** (kind stays `data`, icon `json-duotone.svg`); `source` ∈ inline|file
++ `path` config; port-aware IR (`GraphEdge.dst_port`, `in_edges(dst_port=…)`); file/incoming-fed Data is NOT
+folded (stays a runtime `data` node); executor seeds indegree-0 `data` sources + treats a `vars` edge as a
+PULL (skipped in fan-out); `h_data` file-load+cache in `ctx.scratch["data_out"]`; `h_agent` pulls vars →
+`_build_agent_task(node_vars=…)` (precedence input_vars < wired Data vars < event overrides).
 **Scope:** Patron (authoring) + `agent_runtime/composer` (schema + lowering) + `agent_runtime` runner (Phase 2 only)
 **Owner decision required before any code** — see §9.
 
