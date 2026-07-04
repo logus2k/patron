@@ -270,7 +270,7 @@
         if (global.PatronFitNodeWidth) global.PatronFitNodeWidth(this);
       };
     }
-    Trigger.title = "Scheduled Trigger";
+    Trigger.title = "Scheduler";
     Trigger.desc = "Boundary source: fires the agent on a schedule (cron / interval / one-off date).";
 
     // --- File Initiator: fires when a file appears/changes in a watched folder -
@@ -318,7 +318,7 @@
       send.draw = drawButton;
       apply(this, INIT);
     }
-    ConsoleSend.title = "Console (Send)";
+    ConsoleSend.title = "Text Send";
     ConsoleSend.desc = "Fire the deployed workflow with a typed message (testing/debug).";
 
     // Console (Receive): a display sink. Shows the content that reaches it, pushed live over
@@ -332,14 +332,14 @@
       textW(this, "received");
       apply(this, DEST);
     }
-    ConsoleReceive.title = "Console (Receive)";
+    ConsoleReceive.title = "Text Receive";
     ConsoleReceive.desc = "Shows the content that reaches it, live (testing/debug).";
     SttInitiator.desc = "Boundary source: fires the workflow when incoming speech is transcribed (speech-to-text).";
 
     // --- Agent: the workhorse; capabilities are CONFIG ------------------------
     function Agent() {
       this.addInput("in", TYPES.FLOW);          // the task → {input}
-      this.addInput("vars", TYPES.FLOW);        // a Data (JSON) block → merged into input.vars
+      this.addInput("vars", TYPES.FLOW);        // a JSON block → merged into input.vars
       this.addOutput("out", TYPES.FLOW);
       // Generic defaults for a FRESH Agent — NOT the News Agent's values (those live only
       // in the fixture, loaded by loadNewsAgent). A new agent starts blank + sensible.
@@ -457,7 +457,7 @@
       textW(this, "content");
       apply(this, COLOR);
     }
-    DataBlock.title = "Data (JSON)";
+    DataBlock.title = "JSON";
     DataBlock.desc = "Emit a literal JSON object. Wire into an Agent's 'vars' input to set its variables; also a general flow source.";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
@@ -536,11 +536,11 @@
     group: "Initiators",
     color: INIT,
     items: [
-      { type: "trigger", label: "Scheduled Trigger" },
+      { type: "trigger", label: "Scheduler" },
       { type: "file_initiator", label: "File Initiator" },
       { type: "web_initiator", label: "Web Initiator" },
       { type: "stt_initiator", label: "Speech-to-Text" },
-      { type: "console_send", label: "Console (Send)" },
+      { type: "console_send", label: "Text Send" },
     ],
   };
   const PALETTE = {
@@ -550,7 +550,7 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
-      { type: "data", label: "Data (JSON)" },
+      { type: "data", label: "JSON" },
       { type: "transform", label: "Data Transform", disabled: true },
       { type: "composite", label: "Workflow", disabled: true },
     ],
@@ -562,7 +562,7 @@
       { type: "whatsapp", label: "WhatsApp" },
       { type: "tts", label: "Text-to-Speech" },
       { type: "bus", label: "Event Bus" },
-      { type: "console_receive", label: "Console (Receive)" },
+      { type: "console_receive", label: "Text Receive" },
       { type: "file_destination", label: "File Destination" },
       { type: "web_destination", label: "Web Destination" },
     ],

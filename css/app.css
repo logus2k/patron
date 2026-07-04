@@ -334,7 +334,7 @@ html, body {
   font-size: 13px;
   user-select: none;
 }
-.palette-item:hover { background: var(--item-bg-hover); }
+.palette-item:hover { background: #e8f6ec; } /* very light pastel green (lighter tint of the toolbox header #aee3bc) */
 .palette-item:active { cursor: grabbing; }
 .palette-item.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
 .palette-item.disabled:hover { background: none; }

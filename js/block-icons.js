@@ -18,17 +18,17 @@
     "file_initiator":  { file: "icons/file-download-outline.svg" },
     "web_initiator":   { file: "icons/api.svg" },
     "stt_initiator":   { file: "icons/speech-balloon.svg", scale: 0.889 },
-    "console_send":    { file: "icons/textbox-48-regular.svg" },
+    "console_send":    { file: "icons/text-align-top.svg" },
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
-    "data":            { file: "icons/data.svg", scale: 0.833 }, // 3px smaller (canvas 18→15)
+    "data":            { file: "icons/json-duotone.svg" },
     "transform":       { file: "icons/recycle-solid.svg" },
     "composite":       { file: "icons/workflow.svg" },
     "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },
     "tts":             { file: "icons/speech.svg" },
     "bus":             { file: "icons/bus-alt.svg", scale: 0.944 },
-    "console_receive": { file: "icons/textbox-48-regular.svg" },
+    "console_receive": { file: "icons/text-align-bottom.svg" },
     "file_destination":{ file: "icons/file-upload-outline.svg" },
     "web_destination": { file: "icons/web.svg", scale: 0.833 }, // 3px smaller (canvas 18→15)
   };
@@ -88,7 +88,7 @@
     const img = coloredImage(type, color || "#1d1d1d");
     if (!img || !img._ready) return;
     const s = 18 * ((ic && ic.scale) || 1);
-    const x = 2; // 2px left margin from the node's left edge
+    const x = 4; // 4px left margin from the node's left (title-area) edge
     const y = title_height * -0.5 - s * 0.5;
     ctx.drawImage(img, x, y, s, s);
   }
