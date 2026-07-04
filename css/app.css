@@ -263,6 +263,7 @@ html, body {
 
 /* ---- palette items ---- */
 .palette-group { margin-bottom: 14px; }
+.palette-group:last-child { margin-bottom: 0; } /* no trailing gap under the last group */
 .palette-group .group-label {
   font-size: 10px;
   color: var(--muted);
