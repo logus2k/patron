@@ -38,13 +38,15 @@
   // A broken/blocked photo falls back to initials (Google photos need no-referrer to load).
   function paintAvatar(el, me) {
     el.textContent = "";
-    el.style.background = "rgb(207, 207, 207)"; // neutral grey disk (was a per-email hue via colorFor)
+    el.style.background = "";   // photo covers the disk → NO backdrop (user: remove the grey)
     if (me.picture) {
       var img = document.createElement("img");
       img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = me.picture;
-      img.onerror = function () { img.remove(); el.textContent = initials(me); };
+      // a broken/blocked photo falls back to the initials disk, which DOES need a backdrop
+      img.onerror = function () { img.remove(); el.style.background = "rgb(207, 207, 207)"; el.textContent = initials(me); };
       el.appendChild(img);
     } else {
+      el.style.background = "rgb(207, 207, 207)"; // initials disk needs a backdrop (white text)
       el.textContent = initials(me);
     }
   }

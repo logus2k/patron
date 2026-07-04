@@ -1244,7 +1244,7 @@
       return;
     }
     toolboxPanel = jsPanel.create({
-      headerTitle: panelImg("icons/tool-box.svg", 20) + '<span class="pttxt">Toolbox</span>',
+      headerTitle: panelImg("icons/toolbox.svg", 20) + '<span class="pttxt">Toolbox</span>',
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",
