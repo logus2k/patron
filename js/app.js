@@ -91,34 +91,212 @@
     document.fonts.ready.then(() => lgcanvas.setDirty(true, true));
   }
 
-  // Zoom control (bottom-left): [−] [editable %] [+]. Zooms around the viewport center;
-  // visibility toggles from the View menu and persists in the server workspace (no localStorage).
+  // ===== Canvas controls: a floating pill (bottom-center) with zoom / fit / center /
+  // arrange / find + a pin. All view math rides lgcanvas.ds (screen = (graphPos+offset)*scale).
+  // Three modes via the View menu: hidden / auto-hide-when-idle / pinned (always on). =====
+  function canvasRect() { return (lgcanvas.canvas || canvasEl).getBoundingClientRect(); }
+  const titleH = () => (typeof LiteGraph !== "undefined" && LiteGraph.NODE_TITLE_HEIGHT) || 24;
+
   function setZoom(target) {
-    const ds = lgcanvas.ds;
-    if (!ds) return;
-    const rect = (lgcanvas.canvas || canvasEl).getBoundingClientRect();
+    const ds = lgcanvas.ds; if (!ds) return;
+    const rect = canvasRect();
     ds.changeScale(target, [rect.width / 2, rect.height / 2]); // clamps to [min,max] internally
-    lgcanvas.setDirty(true, true);
-    scheduleSave();
+    lgcanvas.setDirty(true, true); scheduleSave();
   }
-  const zoomCtl = document.createElement("div");
-  zoomCtl.id = "zoom-control";
-  const zMinus = document.createElement("button"); zMinus.className = "zc-btn"; zMinus.textContent = "−"; zMinus.title = "Zoom out";
-  const zVal = document.createElement("input"); zVal.id = "zc-value"; zVal.type = "text"; zVal.spellcheck = false; zVal.title = "Zoom — type a % and press Enter";
-  const zPlus = document.createElement("button"); zPlus.className = "zc-btn"; zPlus.textContent = "+"; zPlus.title = "Zoom in";
-  zoomCtl.append(zMinus, zVal, zPlus);
-  document.body.appendChild(zoomCtl);
-  zMinus.addEventListener("click", () => setZoom(lgcanvas.ds.scale / 1.1));
-  zPlus.addEventListener("click", () => setZoom(lgcanvas.ds.scale * 1.1));
+  // Union bounding box (graph coords, incl. title bar) of a node list, or null if empty.
+  function nodesBBox(nodes) {
+    if (!nodes || !nodes.length) return null;
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    const b = new Float32Array(4);
+    for (const n of nodes) {
+      if (n.getBounding) n.getBounding(b);
+      else { b[0] = n.pos[0]; b[1] = n.pos[1] - titleH(); b[2] = n.size[0]; b[3] = n.size[1] + titleH(); }
+      minx = Math.min(minx, b[0]); miny = Math.min(miny, b[1]);
+      maxx = Math.max(maxx, b[0] + b[2]); maxy = Math.max(maxy, b[1] + b[3]);
+    }
+    return [minx, miny, maxx - minx, maxy - miny];
+  }
+  // Place graph point (cx,cy) at the viewport center at `scale` (clamped).
+  function applyView(scale, cx, cy) {
+    const ds = lgcanvas.ds, rect = canvasRect();
+    scale = Math.max(ds.min_scale || 0.1, Math.min(ds.max_scale || 10, scale));
+    ds.scale = scale;
+    ds.offset[0] = rect.width / (2 * scale) - cx;
+    ds.offset[1] = rect.height / (2 * scale) - cy;
+    lgcanvas.setDirty(true, true); scheduleSave();
+  }
+  function fitTo(nodes, padding) {
+    const bb = nodesBBox(nodes); if (!bb || !bb[2] || !bb[3]) return;
+    const rect = canvasRect();
+    // Cap the fit zoom at 2× so fitting a single small node doesn't slam to max zoom.
+    const scale = Math.min(2, Math.min(rect.width / bb[2], rect.height / bb[3]) * (padding || 0.88));
+    applyView(scale, bb[0] + bb[2] / 2, bb[1] + bb[3] / 2);
+  }
+  function fitView() { fitTo(graph._nodes); }                         // best fit (all nodes)
+  function centerView() {                                             // recenter, keep zoom
+    const bb = nodesBBox(graph._nodes); if (!bb) return;
+    applyView(lgcanvas.ds.scale, bb[0] + bb[2] / 2, bb[1] + bb[3] / 2);
+  }
+  function selectedNodes() {
+    const sel = lgcanvas.selected_nodes || {};
+    return Object.keys(sel).map((k) => sel[k]).filter(Boolean);
+  }
+  function fitSelection() { const s = selectedNodes(); fitTo(s.length ? s : graph._nodes); }
+  function centerOnNode(node) {
+    if (!node) return;
+    const b = new Float32Array(4); node.getBounding(b);
+    applyView(lgcanvas.ds.scale, b[0] + b[2] / 2, b[1] + b[3] / 2);
+    if (lgcanvas.selectNodes) lgcanvas.selectNodes([node]);
+  }
+  function arrangeGraph() {
+    if (graph.arrange) graph.arrange();
+    lgcanvas.setDirty(true, true); fitView(); scheduleSave();
+  }
+  function alignSelected(direction) {
+    const s = selectedNodes(); if (s.length < 2 || !global.LGraphCanvas) return;
+    global.LGraphCanvas.active_canvas = lgcanvas;
+    global.LGraphCanvas.alignNodes(s, direction);
+    lgcanvas.setDirty(true, true); scheduleSave();
+  }
+  function addGroup() {
+    if (!(global.LiteGraph && global.LiteGraph.LGraphGroup)) return;
+    const g = new global.LiteGraph.LGraphGroup("Group");
+    const ds = lgcanvas.ds, rect = canvasRect();
+    const cx = rect.width / (2 * ds.scale) - ds.offset[0];
+    const cy = rect.height / (2 * ds.scale) - ds.offset[1];
+    g.pos = [cx - 150, cy - 110]; g.size = [300, 220];
+    graph.add(g); lgcanvas.setDirty(true, true); scheduleSave();
+  }
+
+  // ---- mode toggles (persisted): lock / snap / link style / arrows -------------
+  let canvasLocked = false, snapGrid = false, curvedLinks = true, linkArrows = false;
+  function applyLock(v) {
+    canvasLocked = v; lgcanvas.read_only = v;          // view-only: no node moves/edits; pan+zoom stay
+    if (menuBar) { menuBar.setContext("canvasLocked", v); if (menuBar.refresh) menuBar.refresh(); }
+  }
+  function applySnap(v) {
+    snapGrid = v; lgcanvas.align_to_grid = v;          // nodes snap to CANVAS_GRID_SIZE on drop
+    if (menuBar) { menuBar.setContext("snapGrid", v); if (menuBar.refresh) menuBar.refresh(); }
+  }
+  function applyLinks() {
+    lgcanvas.links_render_mode = curvedLinks
+      ? global.LiteGraph.SPLINE_LINK : global.LiteGraph.STRAIGHT_LINK;
+    lgcanvas.render_connection_arrows = linkArrows;
+    lgcanvas.setDirty(true, true);
+    if (menuBar) {
+      menuBar.setContext("curvedLinks", curvedLinks);
+      menuBar.setContext("linkArrows", linkArrows);
+      if (menuBar.refresh) menuBar.refresh();
+    }
+  }
+
+  // ---- inline SVG icons (currentColor → theme-aware) ---------------------------
+  const svg = (inner) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  const ICONS = {
+    minus: svg('<path d="M5 12h14"/>'),
+    plus: svg('<path d="M12 5v14M5 12h14"/>'),
+    reset: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>'),
+    fit: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+    center: svg('<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="3.2"/>'),
+    fitsel: svg('<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3.5 3"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'),
+    arrange: svg('<rect x="4" y="4" width="7" height="7" rx="1.3"/><rect x="13" y="4" width="7" height="7" rx="1.3"/><rect x="4" y="13" width="7" height="7" rx="1.3"/><rect x="13" y="13" width="7" height="7" rx="1.3"/>'),
+    find: svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.3-4.3"/>'),
+    pin: svg('<path d="M12 21s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10z"/><circle cx="12" cy="11" r="2.2"/>'),
+  };
+  function iconBtn(name, title, onClick) {
+    const b = document.createElement("button");
+    b.className = "cc-btn"; b.title = title; b.type = "button"; b.innerHTML = ICONS[name];
+    b.addEventListener("click", (e) => { e.preventDefault(); onClick(); });
+    return b;
+  }
+  const ccSep = () => { const s = document.createElement("span"); s.className = "cc-sep"; return s; };
+
+  // ---- the bar ----------------------------------------------------------------
+  const ccBar = document.createElement("div");
+  ccBar.id = "canvas-controls";
+  const zVal = document.createElement("input");
+  zVal.id = "cc-value"; zVal.type = "text"; zVal.spellcheck = false; zVal.title = "Zoom — type a % and press Enter";
+  const pinBtn = iconBtn("pin", "Pin (keep visible)", () => setPinned(!controlsPinned));
+  ccBar.append(
+    iconBtn("minus", "Zoom out", () => setZoom(lgcanvas.ds.scale / 1.1)),
+    zVal,
+    iconBtn("plus", "Zoom in", () => setZoom(lgcanvas.ds.scale * 1.1)),
+    ccSep(),
+    iconBtn("reset", "Reset zoom to 100%", () => setZoom(1)),
+    iconBtn("fit", "Best fit (fit all to screen)", fitView),
+    iconBtn("center", "Center diagram", centerView),
+    iconBtn("fitsel", "Fit to selection", fitSelection),
+    ccSep(),
+    iconBtn("arrange", "Auto-arrange", arrangeGraph),
+    iconBtn("find", "Find node", openFind),
+    ccSep(),
+    pinBtn,
+  );
+  document.body.appendChild(ccBar);
   zVal.addEventListener("focus", () => zVal.select());
   zVal.addEventListener("keydown", (e) => { if (e.key === "Enter") zVal.blur(); });
   zVal.addEventListener("change", () => { const v = parseFloat(zVal.value); if (isFinite(v) && v > 0) setZoom(v / 100); });
-  function toggleZoomControl() {
-    const vis = zoomCtl.style.display === "none";
-    zoomCtl.style.display = vis ? "" : "none";
-    if (menuBar) { menuBar.setContext("zoomVisible", vis); if (menuBar.refresh) menuBar.refresh(); }
-    scheduleSave();
+
+  // ---- find-node popup --------------------------------------------------------
+  let findBox = null;
+  function openFind() {
+    if (findBox) { findBox.focus(); findBox.select(); return; }
+    findBox = document.createElement("input");
+    findBox.id = "cc-find"; findBox.type = "text"; findBox.placeholder = "Find node…"; findBox.spellcheck = false;
+    document.body.appendChild(findBox);
+    const close = () => { if (findBox) { findBox.remove(); findBox = null; } };
+    const jump = () => {
+      const q = findBox.value.trim().toLowerCase(); if (!q) return;
+      const hit = (graph._nodes || []).find((n) => {
+        const p = n.properties || {};
+        return [n.title, n.type, p.agent_id, p.persona, p.target].join(" ").toLowerCase().includes(q);
+      });
+      if (hit) centerOnNode(hit);
+    };
+    findBox.addEventListener("input", jump);
+    findBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { jump(); close(); } else if (e.key === "Escape") close();
+    });
+    findBox.addEventListener("blur", () => setTimeout(close, 120));
+    findBox.focus();
   }
+
+  // ---- visibility: hidden / auto-hide-when-idle / pinned ----------------------
+  let controlsVisible = true, controlsPinned = false, ccHover = false, ccHideTimer = null;
+  function revealBar() {
+    if (!controlsVisible) return;
+    ccBar.classList.add("visible");
+    if (controlsPinned) return;                        // pinned: never schedule a hide
+    clearTimeout(ccHideTimer);
+    ccHideTimer = setTimeout(() => {
+      if (!ccHover && !controlsPinned) ccBar.classList.remove("visible");
+    }, 2500);
+  }
+  function refreshControlsMode() {
+    ccBar.style.display = controlsVisible ? "" : "none";
+    ccBar.classList.toggle("pinned", controlsPinned);
+    pinBtn.classList.toggle("active", controlsPinned);
+    if (!controlsVisible) { clearTimeout(ccHideTimer); return; }
+    if (controlsPinned) ccBar.classList.add("visible"); else revealBar();
+  }
+  function setPinned(v) {
+    controlsPinned = v;
+    if (menuBar) { menuBar.setContext("controlsPinned", v); if (menuBar.refresh) menuBar.refresh(); }
+    refreshControlsMode(); scheduleSave();
+  }
+  function toggleControls() {
+    controlsVisible = !controlsVisible;
+    if (menuBar) { menuBar.setContext("controlsVisible", controlsVisible); if (menuBar.refresh) menuBar.refresh(); }
+    refreshControlsMode(); scheduleSave();
+  }
+  ccBar.addEventListener("mouseenter", () => { ccHover = true; clearTimeout(ccHideTimer); });
+  ccBar.addEventListener("mouseleave", () => { ccHover = false; revealBar(); });
+  // Canvas mouse activity reveals the bar (when not pinned).
+  (document.getElementById("canvas-wrap") || document)
+    .addEventListener("mousemove", () => { if (controlsVisible && !controlsPinned) revealBar(); });
+  refreshControlsMode();  // initial paint (default: visible + auto-hide); applyWorkspace corrects it
+
   let _lastZoom = null;
   (function tickZoom() {
     const z = Math.round(((lgcanvas.ds && lgcanvas.ds.scale) || 1) * 100);
@@ -471,7 +649,13 @@
         },
         blockRects: window.PatronApp.blockRects || {}, // per-block dedicated-panel positions
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
-        zoomVisible: zoomCtl.style.display !== "none",
+        // Canvas-controls state (3 modes = visible × pinned) + canvas display toggles.
+        controlsVisible: controlsVisible,
+        controlsPinned: controlsPinned,
+        canvasLocked: canvasLocked,
+        snapGrid: snapGrid,
+        curvedLinks: curvedLinks,
+        linkArrows: linkArrows,
       },
     };
   }
@@ -537,10 +721,20 @@
     const tplEl = window.PatronProps && window.PatronProps.tplPanel ? window.PatronProps.tplPanel() : null;
     if (tplEl) applyPanelRect(tplEl, panels.tpl);
     if (window.PatronProps && window.PatronProps.restore) window.PatronProps.restore(); // open it if it was visible
-    // Zoom control visibility (default visible).
-    const zv = ui.zoomVisible !== false;
-    zoomCtl.style.display = zv ? "" : "none";
-    if (menuBar) menuBar.setContext("zoomVisible", zv);
+    // Canvas-controls state (defaults: visible, unpinned, unlocked, no snap, curved links).
+    // Back-compat: an old workspace with only `zoomVisible` maps to controlsVisible.
+    controlsVisible = ui.controlsVisible !== undefined ? !!ui.controlsVisible : (ui.zoomVisible !== false);
+    controlsPinned = !!ui.controlsPinned;
+    curvedLinks = ui.curvedLinks !== false;
+    linkArrows = !!ui.linkArrows;
+    applyLock(!!ui.canvasLocked);
+    applySnap(!!ui.snapGrid);
+    applyLinks();
+    if (menuBar) {
+      menuBar.setContext("controlsVisible", controlsVisible);
+      menuBar.setContext("controlsPinned", controlsPinned);
+    }
+    refreshControlsMode();
     graph.setDirtyCanvas(true, true);
     // Restore the previous selection (auto-save captures it on pointerup).
     if (Array.isArray(ui.selected) && ui.selected.length && lgcanvas.selectNodes) {
@@ -722,7 +916,12 @@
   menuBar.setContext("isDark", document.documentElement.dataset.theme === "dark");
   menuBar.setContext("isLight", document.documentElement.dataset.theme !== "dark");
   menuBar.setContext("toolboxVisible", true);
-  menuBar.setContext("zoomVisible", true);
+  menuBar.setContext("controlsVisible", true);
+  menuBar.setContext("controlsPinned", false);
+  menuBar.setContext("canvasLocked", false);
+  menuBar.setContext("snapGrid", false);
+  menuBar.setContext("curvedLinks", true);
+  menuBar.setContext("linkArrows", false);
   menuBar.setContext("outputVisible", false);
   menuBar.model = global.PATRON_MENU;
   menuBar.render();
@@ -1039,20 +1238,35 @@
   menuBar.registerCommand("build.compile", compileToDsl);
   // --- View ---
   menuBar.registerCommand("view.toolbox", toggleToolbox);
-  menuBar.registerCommand("view.zoom", toggleZoomControl);
+  menuBar.registerCommand("view.controls", toggleControls);
+  menuBar.registerCommand("view.pinControls", () => setPinned(!controlsPinned));
   menuBar.registerCommand("view.output", toggleOutput);
   menuBar.registerCommand("theme.dark", () => { applyTheme("dark"); scheduleSave(); });
   menuBar.registerCommand("theme.white", () => { applyTheme("light"); scheduleSave(); });
   menuBar.registerCommand("view.zoomIn", () => setZoom((lgcanvas.ds.scale || 1) * 1.1));
   menuBar.registerCommand("view.zoomOut", () => setZoom((lgcanvas.ds.scale || 1) / 1.1));
   menuBar.registerCommand("view.resetZoom", () => setZoom(1));
+  menuBar.registerCommand("view.fit", fitView);
+  menuBar.registerCommand("view.center", centerView);
+  menuBar.registerCommand("view.fitSelection", fitSelection);
+  menuBar.registerCommand("view.arrange", arrangeGraph);
+  menuBar.registerCommand("view.find", openFind);
+  menuBar.registerCommand("view.addGroup", addGroup);
+  menuBar.registerCommand("view.alignLeft", () => alignSelected("left"));
+  menuBar.registerCommand("view.alignRight", () => alignSelected("right"));
+  menuBar.registerCommand("view.alignTop", () => alignSelected("top"));
+  menuBar.registerCommand("view.alignBottom", () => alignSelected("bottom"));
+  menuBar.registerCommand("view.lock", () => { applyLock(!canvasLocked); scheduleSave(); });
+  menuBar.registerCommand("view.snap", () => { applySnap(!snapGrid); scheduleSave(); });
+  menuBar.registerCommand("view.curved", () => { curvedLinks = !curvedLinks; applyLinks(); scheduleSave(); });
+  menuBar.registerCommand("view.arrows", () => { linkArrows = !linkArrows; applyLinks(); scheduleSave(); });
   // --- Help ---
   menuBar.registerCommand("help.about", showAbout);
   // --- Planned (stubs — announce, don't crash) ---
   ["project.import", "project.export",
    "edit.undo", "edit.redo",
    "build.validate", "build.status",
-   "view.fit", "help.docs", "help.shortcuts"]
+   "help.docs", "help.shortcuts"]
     .forEach((id) => menuBar.registerCommand(id, () => stub(id)));
 
   // jsPanel's default close icon is a heavy FILLED "✕"; swap it for a thin stroked X so it

@@ -173,36 +173,66 @@ html, body {
   z-index: 0;
 }
 
-/* Canvas zoom control (bottom-left): [−] [editable %] [+]. */
-#zoom-control {
+/* Canvas controls: a floating pill at bottom-center — zoom / fit / center / arrange / find
+   + a pin. Three modes (View menu): hidden (display:none), auto-hide-when-idle (fades via
+   .visible), or always-on (.pinned). Theme-aware via CSS vars. */
+#canvas-controls {
   position: fixed;
-  left: 12px;
-  bottom: 12px;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%) translateY(6px);
   z-index: 1000; /* above the jsPanel panels (~100) so their resize handles don't block it */
   display: flex;
   align-items: center;
-  gap: 1px;
-  padding: 2px;
+  gap: 2px;
+  padding: 4px 6px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  opacity: 0.9;
-  font: 11px "Roboto", system-ui, sans-serif;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
   color: var(--text);
+  font: 12px "Roboto", system-ui, sans-serif;
   user-select: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
-#zoom-control:hover { opacity: 1; }
-#zoom-control .zc-btn {
-  border: 0; background: transparent; color: var(--text);
-  width: 20px; height: 20px; border-radius: 4px;
-  font-size: 14px; line-height: 1; cursor: pointer;
+#canvas-controls.visible,
+#canvas-controls.pinned {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
-#zoom-control .zc-btn:hover { background: var(--item-bg-hover); }
-#zoom-control #zc-value {
-  width: 46px; text-align: center; border: 0; background: transparent;
-  color: var(--text); font: inherit; padding: 2px 0; outline: none;
+#canvas-controls .cc-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent;
+  color: var(--text); cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
 }
-#zoom-control #zc-value:focus { background: var(--bg); border-radius: 4px; }
+#canvas-controls .cc-btn svg { width: 18px; height: 18px; display: block; }
+#canvas-controls .cc-btn:hover { background: var(--item-bg-hover); color: var(--accent); }
+#canvas-controls .cc-btn.active { color: var(--accent); }
+#canvas-controls .cc-btn.active svg { fill: color-mix(in srgb, var(--accent) 22%, transparent); }
+#canvas-controls .cc-sep {
+  width: 1px; align-self: stretch; margin: 3px 4px; background: var(--panel-border);
+}
+#canvas-controls #cc-value {
+  width: 48px; text-align: center; border: 0; background: transparent;
+  color: var(--text); font: inherit; padding: 3px 0; outline: none;
+  font-variant-numeric: tabular-nums;
+}
+#canvas-controls #cc-value:focus { background: var(--bg); border-radius: 4px; }
+
+/* Find-node input (opens above the bar, centered) */
+#cc-find {
+  position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%);
+  z-index: 1001; width: 240px; padding: 7px 11px;
+  border: 1px solid var(--accent); border-radius: 8px;
+  background: var(--panel); color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  font: 13px "Roboto", system-ui, sans-serif; outline: none;
+}
 
 /* ---- floating Toolbox (jsPanel, theme:'none' → themed via our vars) ---- */
 /* Same drop shadow as the litegraph blocks (canvas: offset 2,2 / blur 3 / rgba(0,0,0,.5)). */
