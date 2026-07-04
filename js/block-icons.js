@@ -13,10 +13,10 @@
   // Keyed by the composer block kind (== graph node type). New vocabulary only.
   // type id -> { file } (colored svg, as-is) | { color, paths } (recolorable Lucide line)
   const ICONS = {
-    "trigger":         { file: "icons/clock-alarm-20.svg" },
+    "trigger":         { file: "icons/alarm.svg" },
     "file_initiator":  { file: "icons/file-download-outline.svg" },
-    "web_initiator":   { file: "icons/connectors.svg" },
-    "stt_initiator":   { file: "icons/left-speech-bubble.svg" },
+    "web_initiator":   { file: "icons/api.svg" },
+    "stt_initiator":   { file: "icons/speech-bubble.svg" },
     "console_send":    { file: "icons/textbox-48-regular.svg" },
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
