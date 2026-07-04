@@ -1,6 +1,6 @@
 # Spec — Data (JSON) Block + Agent `vars` Port
 
-**Status:** DRAFT · PROPOSAL (nothing implemented) · 2026-07-04
+**Status:** PHASE 1 IMPLEMENTED & live-verified · 2026-07-04 (Phase 2 dynamic-file/port-aware-IR deferred)
 **Scope:** Patron (authoring) + `agent_runtime/composer` (schema + lowering) + `agent_runtime` runner (Phase 2 only)
 **Owner decision required before any code** — see §9.
 

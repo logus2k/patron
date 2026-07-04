@@ -13,23 +13,24 @@
   // Keyed by the composer block kind (== graph node type). New vocabulary only.
   // type id -> { file } (colored svg, as-is) | { color, paths } (recolorable Lucide line)
   const ICONS = {
-    "trigger":         { file: "icons/alarm.svg" },
+    // scale: 0.889 → 2px smaller than the default (canvas 18→16, toolbox 20→18).
+    "trigger":         { file: "icons/alarm.svg", scale: 0.889 },
     "file_initiator":  { file: "icons/file-download-outline.svg" },
     "web_initiator":   { file: "icons/api.svg" },
-    "stt_initiator":   { file: "icons/speech-balloon.svg" },
+    "stt_initiator":   { file: "icons/speech-balloon.svg", scale: 0.889 },
     "console_send":    { file: "icons/textbox-48-regular.svg" },
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
-    "data":            { file: "icons/data.svg" },
+    "data":            { file: "icons/data.svg", scale: 0.889 },
     "transform":       { file: "icons/recycle-1.svg" },
     "composite":       { file: "icons/workflow.svg" },
-    "whatsapp":        { file: "icons/whatsapp.svg" },
+    "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },
     "tts":             { file: "icons/speech.svg" },
-    "bus":             { file: "icons/bus-alt.svg" },
+    "bus":             { file: "icons/bus-alt.svg", scale: 0.944 },
     "console_receive": { file: "icons/textbox-48-regular.svg" },
     "file_destination":{ file: "icons/file-upload-outline.svg" },
-    "web_destination": { file: "icons/web.svg" },
+    "web_destination": { file: "icons/web.svg", scale: 0.889 },
   };
 
   function redraw() {
