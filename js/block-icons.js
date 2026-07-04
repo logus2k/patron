@@ -22,15 +22,15 @@
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
-    "data":            { file: "icons/data.svg", scale: 0.889 },
-    "transform":       { file: "icons/recycle-1.svg" },
+    "data":            { file: "icons/data.svg", scale: 0.833 }, // 3px smaller (canvas 18→15)
+    "transform":       { file: "icons/recycle-solid.svg" },
     "composite":       { file: "icons/workflow.svg" },
     "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },
     "tts":             { file: "icons/speech.svg" },
     "bus":             { file: "icons/bus-alt.svg", scale: 0.944 },
     "console_receive": { file: "icons/textbox-48-regular.svg" },
     "file_destination":{ file: "icons/file-upload-outline.svg" },
-    "web_destination": { file: "icons/web.svg", scale: 0.889 },
+    "web_destination": { file: "icons/web.svg", scale: 0.833 }, // 3px smaller (canvas 18→15)
   };
 
   function redraw() {
