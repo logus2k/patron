@@ -768,6 +768,7 @@
       return;
     }
     if (node.type === "trigger") { renderScheduleInto(body, node); return; }
+    if (node.type === "agent" && window.PatronAgentConfig) { window.PatronAgentConfig.render(body, node); return; }
     // Prefer the block's own catalog metadata (control per field); fall back to the node's
     // widgets if the catalog isn't loaded / has no entry for this type.
     const fields = CATALOG && CATALOG[node.type];
@@ -1062,6 +1063,9 @@
   // Render a block's fields + management into a given container (works for any panel instance).
   function renderBlockInto(container, node) {
     if (node && node.type === "trigger") { renderScheduleInto(container, node); return; }
+    if (node && node.type === "agent" && window.PatronAgentConfig) {
+      window.PatronAgentConfig.render(container, node); return;
+    }
     container.innerHTML = "";
     // No block-name heading in the body — the panel title already carries "<Block> Configuration".
     const fields = CATALOG && CATALOG[node.type];
@@ -1167,7 +1171,13 @@
   window.PatronProps = { toggle, setOpen, isOpen: () => open, populate, panel: () => panel,
                          openBlock: openBlockPanel,   // double-click → this block's dedicated panel
                          mcpPanel: () => mcpPanel, mcpRect: mcpRectNow,
-                         tplPanel: () => tplPanel, tplRect: tplRectNow };
+                         tplPanel: () => tplPanel, tplRect: tplRectNow,
+                         // Seams for bespoke per-block panels (e.g. the tabbed Agent config in
+                         // js/agent-config-panel.js): reuse the SAME field renderers/pickers.
+                         field: fieldForSchema,
+                         catalogFor: (t) => (CATALOG && CATALOG[t]) || null,
+                         preresolve: preresolveRefs,
+                         addManagement: addManagementRow };
 
   ready((app) => {
     const canvas = app.canvas;

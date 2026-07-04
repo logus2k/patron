@@ -363,6 +363,21 @@ html, body {
 .sch-presets { margin-top: 9px; }
 .sch-sub { margin: 0 0 12px; }
 
+/* ---- Agent Configuration: dedicated TABBED panel (js/agent-config-panel.js) ---------- */
+.ac-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; }
+.ac-tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; cursor: pointer;
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  background: var(--bg); color: var(--text);
+  font: 12px "Roboto", system-ui, sans-serif; letter-spacing: .01em;
+}
+.ac-tab:hover { border-color: var(--accent); }
+.ac-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ac-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+.ac-tab.active .ac-dot { background: #fff; }
+.ac-pane { display: flex; flex-direction: column; }
+
 /* MCP Tools floating panel: one-line toolbar (filter + Select all/Clear + count) + list */
 .mcp-bar {
   display: flex; align-items: center; gap: 8px;
