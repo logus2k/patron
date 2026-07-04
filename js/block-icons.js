@@ -21,6 +21,7 @@
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
+    "data":            { file: "icons/data.svg" },
     "transform":       { file: "icons/recycle-1.svg" },
     "composite":       { file: "icons/workflow.svg" },
     "whatsapp":        { file: "icons/whatsapp.svg" },
@@ -86,7 +87,7 @@
     const img = coloredImage(type, color || "#1d1d1d");
     if (!img || !img._ready) return;
     const s = 18 * ((ic && ic.scale) || 1);
-    const x = title_height * 0.5 - s * 0.5 + 3;
+    const x = 2; // 2px left margin from the node's left edge
     const y = title_height * -0.5 - s * 0.5;
     ctx.drawImage(img, x, y, s, s);
   }

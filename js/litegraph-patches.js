@@ -553,10 +553,10 @@
                 );
             }
             ctx.fill();
-            if (LiteGraph.NODE_BORDER_COLOR && !low_quality) { /* PATRON: 1px node border matching the panels */
+            if (LiteGraph.NODE_BORDER_COLOR && !low_quality) { /* PATRON: 0.5px node border matching the panels */
                 ctx.shadowColor = "transparent";
                 ctx.strokeStyle = LiteGraph.NODE_BORDER_COLOR;
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 0.5;
                 ctx.stroke();
             }
 
@@ -713,7 +713,7 @@
                         var measure = ctx.measureText(title);
                         ctx.fillText(
                             title.substr(0,20), //avoid urls too long
-                            title_height,// + measure.width * 0.5,
+                            22,// icon(2px margin + 18px) + 2px margin — was title_height
                             LiteGraph.NODE_TITLE_TEXT_Y - title_height
                         );
                         ctx.textAlign = "left";
@@ -721,7 +721,7 @@
                         ctx.textAlign = "left";
                         ctx.fillText(
                             title,
-                            title_height,
+                            22,// icon(2px margin + 18px) + 2px margin — was title_height
                             LiteGraph.NODE_TITLE_TEXT_Y - title_height
                         );
                     }

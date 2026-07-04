@@ -338,7 +338,8 @@
 
     // --- Agent: the workhorse; capabilities are CONFIG ------------------------
     function Agent() {
-      this.addInput("in", TYPES.FLOW);
+      this.addInput("in", TYPES.FLOW);          // the task → {input}
+      this.addInput("vars", TYPES.FLOW);        // a Data (JSON) block → merged into input.vars
       this.addOutput("out", TYPES.FLOW);
       // Generic defaults for a FRESH Agent — NOT the News Agent's values (those live only
       // in the fixture, loaded by loadNewsAgent). A new agent starts blank + sensible.
@@ -445,6 +446,20 @@
     Composite.title = "Workflow";
     Composite.desc = "A saved workflow referenced as one participant (nesting).";
 
+    // --- Data (JSON): emit a literal JSON object -----------------------------
+    // A general flow SOURCE (out only). Wire its out into an Agent's `vars` input to set the
+    // Agent's named template variables ({topic}, {n}); the compiler folds an inline Data block
+    // into the Agent's input.vars at deploy. Its content is edited in the Properties panel
+    // (control="json" from /composer/catalog).
+    function DataBlock() {
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("content", "{}");
+      textW(this, "content");
+      apply(this, COLOR);
+    }
+    DataBlock.title = "Data (JSON)";
+    DataBlock.desc = "Emit a literal JSON object. Wire into an Agent's 'vars' input to set its variables; also a general flow source.";
+
     // --- Destinations: in-only sinks; the "where" -----------------------------
     function destination(channel, defaultTarget, targetLabel, withOutput) {
       function Dest() {
@@ -503,6 +518,7 @@
       ["transform", Transform],
       ["vector_query", VectorDatabase],
       ["graph_query", GraphDatabase],
+      ["data", DataBlock],
       ["composite", Composite],
       ["whatsapp", WhatsApp],
       ["tts", Tts],
@@ -534,6 +550,7 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
+      { type: "data", label: "Data (JSON)" },
       { type: "transform", label: "Data Transform", disabled: true },
       { type: "composite", label: "Workflow", disabled: true },
     ],

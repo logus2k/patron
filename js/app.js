@@ -799,8 +799,9 @@
     // selection outline around a node — same color as the node's selected (lit-up) edges
     // so the border and links read as one. (litegraph hardcodes #FFF → invisible on white.)
     LiteGraph.NODE_BOX_OUTLINE_COLOR = cssVar("--link-highlight", "#ffb02e");
-    // 1px node border matching the panels' border (litegraph doesn't stroke one by default).
-    LiteGraph.NODE_BORDER_COLOR = cssVar("--panel-border", "#d8dee6");
+    // Node border matching the panels' border (0.5px solid rgb(203 203 203)); fixed grey in
+    // both themes, same as the jsPanel border. (litegraph doesn't stroke one by default.)
+    LiteGraph.NODE_BORDER_COLOR = "rgb(203, 203, 203)";
     // Selected-node title text — theme-aware for contrast against the selection bar
     // (light theme: strong orange bar → white text; dark theme: amber bar → dark text).
     LiteGraph.NODE_SELECTED_TITLE_COLOR = cssVar("--node-selected-title", "#233040");
