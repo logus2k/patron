@@ -22,7 +22,7 @@
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
-    "data":            { file: "icons/json-duotone.svg" },
+    "data":            { file: "icons/data.svg" },
     "transform":       { file: "icons/recycle-solid.svg" },
     "composite":       { file: "icons/workflow.svg" },
     "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },

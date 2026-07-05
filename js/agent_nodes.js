@@ -430,7 +430,7 @@
       textW(this, "script");
       apply(this, COLOR);
     }
-    Transform.title = "Data Transform";
+    Transform.title = "Data Transformation";
     Transform.desc = "Deterministic map in→out; body can be generated from the port schemas.";
 
     // --- Vector Database: standalone dense-corpus query (outputs results) -----
@@ -495,7 +495,7 @@
       textW(this, "path");
       apply(this, COLOR);
     }
-    DataBlock.title = "Data";
+    DataBlock.title = "Data Source";
     DataBlock.desc = "Load data in many formats (JSON/YAML/CSV/Markdown/HTML/PDF/Parquet/…), inline or from a file. Wire into an Agent's 'vars' (object formats) or use as a general flow source.";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
@@ -588,8 +588,8 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
-      { type: "data", label: "JSON" },
-      { type: "transform", label: "Data Transform", disabled: true },
+      { type: "data", label: "Data Source" },
+      { type: "transform", label: "Data Transformation", disabled: true },
       { type: "composite", label: "Workflow", disabled: true },
     ],
   };

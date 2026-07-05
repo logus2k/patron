@@ -72,15 +72,20 @@
     if (bar) return bar;
     bar = document.createElement("div");
     bar.id = "debug-bar";
+    statusEl = document.createElement("span"); statusEl.className = "db-status"; statusEl.textContent = "Ready";
     const dot = document.createElement("span"); dot.className = "db-dot";
-    statusEl = document.createElement("span"); statusEl.className = "db-status"; statusEl.textContent = "ready";
     const sep = document.createElement("span"); sep.className = "db-sep";
-    startBtn = mkBtn("▶ Start", "Start Debugging (F8)", function () { PD.start(); });
+    startBtn = mkBtn("Start", "Start Debugging (F8)", function () { PD.start(); });
+    // A flex-centred SVG play icon (glyph triangles baseline-misalign with the label text).
+    startBtn.innerHTML =
+      '<svg class="db-play" width="8" height="10" viewBox="0 0 10 12" aria-hidden="true">' +
+      '<path d="M1 1 L9 6 L1 11 Z" fill="currentColor"/></svg>Start';
     contBtn = mkBtn("Continue", "Resume to the next breakpoint (F8)", function () { PD.cont(); });
     stepBtn = mkBtn("Step", "Run the next node, then pause (F10)", function () { PD.step(); });
     stopBtn = mkBtn("Stop", "Stop debugging (Shift+F8)", function () { PD.stop(); });
     restartBtn = mkBtn("Restart", "Restart debugging (Ctrl+Shift+F8)", function () { PD.restart(); });
-    bar.append(dot, statusEl, sep, startBtn, contBtn, stepBtn, stopBtn, restartBtn);
+    // Controls on the LEFT; then the LED + status text on the RIGHT (LED before the label).
+    bar.append(startBtn, contBtn, stepBtn, stopBtn, restartBtn, sep, dot, statusEl);
     document.body.appendChild(bar);
     return bar;
   }
@@ -228,7 +233,7 @@
     },
     getBreakpoints: function () { return [...breakpoints]; },
     // --- Debug panel open/close (from js/trace-panel.js) drives the bar's idle visibility. ---
-    onPanelOpen: function () { panelOpen = true; if (!debugCid) status("ready"); syncBar(); },
+    onPanelOpen: function () { panelOpen = true; if (!debugCid) status("Ready"); syncBar(); },
     onPanelClose: function () { panelOpen = false; syncBar(); },
     activeCid: function () { return debugCid; },
     isDebugging: function () { return !!debugCid; },

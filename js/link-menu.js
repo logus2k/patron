@@ -54,7 +54,7 @@
   }
 
   // Mirror the Toolbox "Blocks" group, but keep only what can actually be dropped mid-edge:
-  //   - ENABLED in the Toolbox (skip `disabled` items, e.g. Data Transform / Workflow), and
+  //   - ENABLED in the Toolbox (skip `disabled` items, e.g. Data Transformation / Workflow), and
   //   - genuinely PASS-THROUGH (has BOTH an input and an output) so it can rewire left→node→right.
   // This drops out-only sources like JSON (Data) and in-only sinks — matching the Toolbox names.
   function paletteItems() {
