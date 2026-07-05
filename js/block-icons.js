@@ -18,7 +18,7 @@
     "file_initiator":  { file: "icons/file-download-outline.svg" },
     "web_initiator":   { file: "icons/api.svg" },
     "stt_initiator":   { file: "icons/speech-balloon.svg", scale: 0.889 },
-    "console_send":    { file: "icons/text-align-top.svg" },
+    "console_send":    { file: "icons/text-align-top.svg", dy: 2 },   // nudge 2px DOWN (canvas y+)
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
@@ -28,7 +28,7 @@
     "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },
     "tts":             { file: "icons/speech.svg" },
     "bus":             { file: "icons/bus-alt.svg", scale: 0.944 },
-    "console_receive": { file: "icons/text-align-bottom.svg" },
+    "console_receive": { file: "icons/text-align-bottom.svg", dy: -2 }, // nudge 2px UP (canvas y-)
     "file_destination":{ file: "icons/file-upload-outline.svg" },
     "web_destination": { file: "icons/web.svg", scale: 0.833 }, // 3px smaller (canvas 18→15)
   };
@@ -49,7 +49,9 @@
     const ic = ICONS[type];
     if (!ic || !ic.file) return "";
     const s = Math.round((size || 24) * (ic.scale || 1)); // per-icon scale (some fill their viewBox)
-    return maskSpan(ic.file, s);
+    // Same per-icon vertical nudge as the canvas (ic.dy): CSS top +down / -up matches the sign.
+    const extra = ic.dy ? ("position:relative;top:" + ic.dy + "px;") : "";
+    return maskSpan(ic.file, s, extra);
   }
 
   // ---- Canvas icons: recolor the currentColor SVG to a specific colour (the title text colour
@@ -89,7 +91,7 @@
     if (!img || !img._ready) return;
     const s = 18 * ((ic && ic.scale) || 1);
     const x = 10; // 4px accent stripe + 6px left padding before the icon
-    const y = title_height * -0.5 - s * 0.5;
+    const y = title_height * -0.5 - s * 0.5 + ((ic && ic.dy) || 0); // per-icon vertical nudge
     ctx.drawImage(img, x, y, s, s);
   }
 

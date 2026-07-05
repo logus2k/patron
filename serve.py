@@ -437,7 +437,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/status"):
             uid = p0[len(PROJECTS_API) + 1:-len("/status")]
             return self._project_status(uid)
-        for _verb in ("step", "continue", "stop"):
+        for _verb in ("step", "continue", "stop", "breakpoints"):
             if p0.startswith(PROJECTS_API + "/") and p0.endswith("/" + _verb):
                 uid = p0[len(PROJECTS_API) + 1:-len("/" + _verb)]
                 return self._project_debug(uid, _verb)
@@ -547,7 +547,9 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(raw or b"{}")
         except json.JSONDecodeError as e:
             return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
-        payload = {"task": str(body.get("task") or ""), "debug": bool(body.get("debug"))}
+        payload = {"task": str(body.get("task") or ""), "debug": bool(body.get("debug")),
+                   "breakpoints": list(body.get("breakpoints") or []),
+                   "bp_enabled": bool(body.get("bp_enabled", True))}
         try:
             status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/fire", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})
@@ -558,9 +560,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
 
     def _project_debug(self, uid, verb):
-        """Debug control: relay ``POST /api/projects/<uid>/{step|continue|stop}`` with ``{cid}``
-        to the runtime's matching endpoint (owner-gated there). Drives a paused debug run."""
-        if not _UID_RE.match(uid) or verb not in ("step", "continue", "stop"):
+        """Debug control: relay ``POST /api/projects/<uid>/{step|continue|stop|breakpoints}`` to
+        the runtime's matching endpoint (owner-gated there). Drives a paused debug run."""
+        if not _UID_RE.match(uid) or verb not in ("step", "continue", "stop", "breakpoints"):
             return self._json(400, {"ok": False, "error": "invalid request"})
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b"{}"
@@ -569,6 +571,10 @@ class Handler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError as e:
             return self._json(400, {"ok": False, "error": f"invalid JSON: {e}"})
         payload = {"cid": str(body.get("cid") or "")}
+        if verb == "breakpoints":
+            payload["breakpoints"] = list(body.get("breakpoints") or [])
+            if body.get("bp_enabled") is not None:
+                payload["bp_enabled"] = bool(body.get("bp_enabled"))
         try:
             status, resp = _http("POST", f"{RUNTIME_URL}/admin/projects/{uid}/{verb}", payload, headers=self._farm_headers())
             return self._json(status, resp if resp is not None else {})

@@ -89,12 +89,32 @@ window.PATRON_MENU = [
     ],
   },
   {
+    label: "Run",
+    key: "R",
+    items: [
+      // VS Code-style debugger, adapted to a flat workflow graph (one "Step" — no call depth for
+      // Over/Into/Out). Commands wired in app.js → window.PatronDebug (js/debug-controls.js).
+      { label: "Start Debugging", shortcut: "F5", command: "run.start" },
+      { label: "Run Without Debugging", shortcut: "Ctrl+F5", command: "run.runNoDebug" },
+      { label: "Stop Debugging", shortcut: "Shift+F5", command: "run.stop", enabled: "debugging" },
+      { label: "Restart Debugging", shortcut: "Ctrl+Shift+F5", command: "run.restart", enabled: "debugging" },
+      { type: "separator" },
+      { label: "Continue", shortcut: "F5", command: "run.continue", enabled: "paused" },
+      { label: "Step", shortcut: "F10", command: "run.step", enabled: "paused" },
+      { type: "separator" },
+      { label: "Toggle Breakpoint", shortcut: "F9", command: "run.toggleBreakpoint" },
+      { label: "Enable All Breakpoints", command: "run.enableAllBreakpoints" },
+      { label: "Disable All Breakpoints", command: "run.disableAllBreakpoints" },
+      { label: "Remove All Breakpoints", command: "run.removeAllBreakpoints" },
+    ],
+  },
+  {
     label: "View",
     key: "V",
     items: [
       { label: "Toolbox", command: "view.toolbox", type: "checkbox", checked: "toolboxVisible" },
       { label: "Output Panel", command: "view.output", type: "checkbox", checked: "outputVisible" },
-      { label: "Trace Panel", command: "view.trace", type: "checkbox", checked: "traceVisible" },
+      { label: "Debug", command: "view.trace", type: "checkbox", checked: "traceVisible" },
       { label: "Canvas Controls", command: "view.controls", type: "checkbox", checked: "controlsVisible" },
       { type: "separator" },
       // Both themes shown; a checkbox marks the active one.

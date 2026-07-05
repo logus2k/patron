@@ -1144,6 +1144,7 @@
       if (!d) return;
       // Feed EVERY event to the live Trace panel (all event types, grouped by run).
       if (window.PatronTrace && window.PatronTrace.push) window.PatronTrace.push(d);
+      if (window.PatronDebug && window.PatronDebug.onEvent) window.PatronDebug.onEvent(d);
       // Console (Receive): only console.output events route to a console_receive node.
       if (d.event !== "console.output" || !d.node) return;
       const node = graph.getNodeById(Number(String(d.node).split(":").pop()));
@@ -1210,6 +1211,22 @@
   menuBar.registerCommand("view.controls", toggleControls);
   menuBar.registerCommand("view.output", toggleOutput);
   menuBar.registerCommand("view.trace", () => { if (window.PatronTrace) window.PatronTrace.toggle(); });
+  // --- Run (debugger) — commands drive window.PatronDebug (js/debug-controls.js) ---
+  const _dbg = (fn) => () => { if (window.PatronDebug) window.PatronDebug[fn](); };
+  menuBar.registerCommand("run.start", _dbg("start"));
+  menuBar.registerCommand("run.runNoDebug", _dbg("runNoDebug"));
+  menuBar.registerCommand("run.stop", _dbg("stop"));
+  menuBar.registerCommand("run.restart", _dbg("restart"));
+  menuBar.registerCommand("run.continue", _dbg("cont"));
+  menuBar.registerCommand("run.step", _dbg("step"));
+  menuBar.registerCommand("run.toggleBreakpoint", _dbg("toggleBreakpoint"));
+  menuBar.registerCommand("run.enableAllBreakpoints", _dbg("enableAllBreakpoints"));
+  menuBar.registerCommand("run.disableAllBreakpoints", _dbg("disableAllBreakpoints"));
+  menuBar.registerCommand("run.removeAllBreakpoints", _dbg("removeAllBreakpoints"));
+  // Grey out the state-dependent Run items until a debug session is active/paused.
+  menuBar.setContext("debugging", false);
+  menuBar.setContext("paused", false);
+  menuBar.setContext("bpEnabled", true);
   menuBar.registerCommand("theme.dark", () => { applyTheme("dark"); scheduleSave(); });
   menuBar.registerCommand("theme.white", () => { applyTheme("light"); scheduleSave(); });
   menuBar.registerCommand("view.zoomIn", () => setZoom((lgcanvas.ds.scale || 1) * 1.1));

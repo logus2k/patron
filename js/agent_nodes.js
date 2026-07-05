@@ -131,6 +131,18 @@
     };
   }
 
+  // True when a property's current value differs from the block's registered default
+  // (litegraph stores each addProperty default in node.properties_info[].default_value).
+  function fieldChanged(node, name) {
+    if (!node || !node.properties || !node.properties_info) return false;
+    let def, found = false;
+    for (const pi of node.properties_info) { if (pi && pi.name === name) { def = pi.default_value; found = true; break; } }
+    if (!found) return false;
+    const cur = node.properties[name];
+    try { return JSON.stringify(cur) !== JSON.stringify(def); }
+    catch (e) { return cur !== def; }
+  }
+
   // Read-only field renderer: a flat "label ......... value" row — NO box/border/fill, so it
   // reads as a spec sheet, not an editable input (values are edited ONLY in the Properties
   // panel). A hairline divider gives subtle structure. litegraph calls w.draw for unknown
@@ -154,9 +166,23 @@
     ctx.fillStyle = LiteGraph.WIDGET_SECONDARY_TEXT_COLOR;
     ctx.textAlign = "left";
     ctx.fillText(labelText, margin, baseline);
+    // Red "*" suffix on fields whose value differs from the block's registered default
+    // (properties_info.default_value) — a "changed from default" marker, per-field on the block.
+    const labelW = ctx.measureText(labelText).width;
+    let starW = 0;
+    if (fieldChanged(node, w.name)) {
+      const star = " *";
+      const baseFont = ctx.font;
+      const starSize = ((typeof LiteGraph !== "undefined" && LiteGraph.NODE_SUBTEXT_SIZE) || 12) + 2; // 2px bigger
+      ctx.font = "normal " + starSize + "px Arial";
+      ctx.fillStyle = "#e5534b";
+      ctx.fillText(star, margin + labelW, baseline);
+      starW = ctx.measureText(star).width;
+      ctx.font = baseFont; // restore for the right-aligned value
+    }
     const gap = 14;
     const rightX = widget_width - margin;
-    const availW = rightX - (margin + ctx.measureText(labelText).width + gap);
+    const availW = rightX - (margin + labelW + starW + gap);
     let val = String(w.value == null ? "" : w.value);
     if (availW <= 4) {
       val = ""; // no room (very long label) — show nothing rather than overlap

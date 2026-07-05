@@ -29,18 +29,9 @@
                                                 "guard_forbidden", "guard_min_confidence"] },
   ];
 
-  // A capability tab shows a dot when it carries non-default config (Basics/Model are core).
-  function tabActive(id, p) {
-    switch (id) {
-      case "prompt": return !!(p.input_template && String(p.input_template).trim());
-      case "tools":  return !!(p.tools_allow && String(p.tools_allow).trim());
-      case "skills": return !!(p.skills_allow && String(p.skills_allow).trim());
-      case "memory": return (p.memory || "none") !== "none";
-      case "loop":   return (p.loop_type || "off") !== "off";
-      case "ground": return !!(p.rag_domains || p.rag_use_graph || p.guard_forbidden || p.guard_min_confidence);
-      default:       return false;
-    }
-  }
+  // The "changed from default" hint no longer lives on the tab strip — it's now a red asterisk
+  // suffix on each CHANGED property field, drawn on the block itself (see drawField in
+  // agent_nodes.js, which compares node.properties[k] against node.properties_info default_value).
 
   function agentFields() {
     return (global.PatronProps && global.PatronProps.catalogFor)
@@ -110,7 +101,6 @@
       const list = agentFields(); if (list) global.PatronProps.preresolve(node, list);
     }
 
-    const p = node.properties;
     const active = node._acTab && TABS.some((t) => t.id === node._acTab) ? node._acTab : "basics";
     const rerender = () => render(container, node);
 
@@ -120,7 +110,6 @@
       const b = document.createElement("button");
       b.type = "button"; b.className = "ac-tab" + (t.id === active ? " active" : "");
       b.textContent = t.label;
-      if (tabActive(t.id, p)) { const d = document.createElement("span"); d.className = "ac-dot"; b.appendChild(d); }
       b.addEventListener("click", () => { node._acTab = t.id; rerender(); });
       strip.appendChild(b);
     }

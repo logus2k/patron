@@ -6,8 +6,8 @@
  * self-rendered menu (it does NOT use LiteGraph.ContextMenu, so it always shows).
  *
  * Clicking the dot at an edge's midpoint opens ONE flat list:
- *   - a pass-through block (Agent / RAG / Guardrail / Data Transform / Workflow) → dropped at
- *     the edge midpoint, rewiring  left → block → right;
+ *   - the ENABLED, pass-through blocks from the Toolbox "Blocks" group (Agent / Vector Database /
+ *     Graph Database) → dropped at the edge midpoint, rewiring  left → block → right;
  *   - a separator, then "Delete Edge" (last) → removes the connection.
  *
  * Reaches the canvas via window.PatronApp; the node list via window.PatronAgentNodes.
@@ -53,12 +53,19 @@
     return r;
   }
 
-  // Only PASS-THROUGH blocks (in + out) can be inserted mid-edge — that's the "Blocks"
-  // palette group (Agent / RAG / Guardrail / Data Transform / Workflow). Initiators (out-only)
-  // and Destinations (in-only) can't rewire both sides, so they're excluded.
+  // Mirror the Toolbox "Blocks" group, but keep only what can actually be dropped mid-edge:
+  //   - ENABLED in the Toolbox (skip `disabled` items, e.g. Data Transform / Workflow), and
+  //   - genuinely PASS-THROUGH (has BOTH an input and an output) so it can rewire left→node→right.
+  // This drops out-only sources like JSON (Data) and in-only sinks — matching the Toolbox names.
   function paletteItems() {
     const P = window.PatronAgentNodes;
-    return (P && P.PALETTE && P.PALETTE.items) ? P.PALETTE.items.slice() : [];
+    const items = (P && P.PALETTE && P.PALETTE.items) ? P.PALETTE.items : [];
+    return items.filter(function (it) {
+      if (it.disabled) return false;                 // greyed-out in the Toolbox → not insertable
+      let n = null;
+      try { n = LiteGraph.createNode(it.type); } catch (e) { return false; }
+      return !!(n && n.inputs && n.inputs.length && n.outputs && n.outputs.length);
+    });
   }
 
   function place(clientX, clientY) {

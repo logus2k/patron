@@ -253,10 +253,11 @@ html, body {
   width: 1px; align-self: stretch; margin: 3px 4px; background: var(--panel-border);
 }
 
-/* Trace/Debug panel toolbar — same visual language as the canvas controls bar above:
-   flat, borderless buttons on a subtle bar; hover lifts to accent. (js/trace-panel.js) */
+/* Trace/Debug controls — same visual language as the canvas controls bar above: flat,
+   borderless buttons; hover lifts to accent. Used by the Trace panel toolbar AND the floating
+   debug bar (#debug-bar). (js/trace-panel.js) */
 .tp-bar { background: var(--item-bg); }
-.tp-bar .tp-btn {
+.tp-btn {
   display: inline-flex; align-items: center; justify-content: center;
   height: 26px; padding: 0 10px;
   border: 0; border-radius: 6px; background: transparent;
@@ -264,8 +265,8 @@ html, body {
   font: 600 11px "Roboto", system-ui, sans-serif;
   transition: background-color 0.15s, color 0.15s;
 }
-.tp-bar .tp-btn:hover:not(:disabled) { background: var(--item-bg-hover); color: var(--accent); }
-.tp-bar .tp-btn:disabled { opacity: 0.45; cursor: default; }
+.tp-btn:hover:not(:disabled) { background: var(--item-bg-hover); color: var(--accent); }
+.tp-btn:disabled { opacity: 0.45; cursor: default; }
 .tp-bar .tp-input {
   flex: 1; min-width: 0; padding: 4px 7px;
   border: 1px solid var(--panel-border); border-radius: 6px;
@@ -273,6 +274,46 @@ html, body {
   font: 12px "Roboto", system-ui, sans-serif; outline: none;
 }
 .tp-bar .tp-input:focus { border-color: var(--accent); }
+
+/* Floating debug control bar — an IDE-style toolbar pinned TOP-center, mirroring the canvas
+   controls bar (#canvas-controls, bottom-center). Appears while a debug run is active; independent
+   of the Trace panel so it keeps driving the run even if the panel is closed. */
+#debug-bar {
+  position: fixed;
+  left: 50%;
+  top: 52px;                 /* just below the 46px menu bar, centered */
+  transform: translateX(-50%) translateY(-6px);
+  z-index: 1000;             /* above the jsPanel panels (~100), like #canvas-controls */
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font: 12px "Roboto", system-ui, sans-serif;
+  user-select: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+#debug-bar.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+#debug-bar .db-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--link-highlight); flex: 0 0 auto; margin: 0 2px 0 4px;
+}
+#debug-bar.running .db-dot { animation: db-pulse 0.9s ease-in-out infinite; }  /* db-pulse: see badge */
+#debug-bar .db-status {
+  padding: 0 6px; font-weight: 600; white-space: nowrap;
+  max-width: 42vw; overflow: hidden; text-overflow: ellipsis;
+}
+#debug-bar .db-sep { width: 1px; align-self: stretch; margin: 3px 4px; background: var(--panel-border); }
 #canvas-controls #cc-value {
   width: 48px; text-align: center; border: 0; background: transparent;
   color: var(--text); font: inherit; padding: 3px 0; outline: none;
@@ -318,16 +359,19 @@ html, body {
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 /* jsPanel defaults the title to small-caps — override to normal case. */
 .jsPanel-titlebar .jsPanel-title { font-variant: normal !important; }
-/* Configuration panels (block double-click panels): make the header CLOSE button match the
-   block's "×" badge — a dark translucent circle with a white ×, turning red on hover. */
-.patron-config-panel .jsPanel-btn-close {
+/* Configuration panels (block double-click panels) AND the Toolbox: make the header CLOSE
+   button match the block's "×" badge — a dark translucent circle with a white ×, red on hover. */
+.patron-config-panel .jsPanel-btn-close,
+.patron-toolbox .jsPanel-btn-close {
   width: 18px; height: 18px; margin: auto 4px; padding: 0;
   display: inline-flex !important; align-items: center; justify-content: center;
   border-radius: 50% !important;
   background: rgba(0, 0, 0, 0.28) !important; color: #fff !important;
 }
-.patron-config-panel .jsPanel-btn-close:hover { background: rgba(220, 60, 50, 0.95) !important; color: #fff !important; }
-.patron-config-panel .jsPanel-btn-close svg { width: 12px; height: 12px; }
+.patron-config-panel .jsPanel-btn-close:hover,
+.patron-toolbox .jsPanel-btn-close:hover { background: rgba(220, 60, 50, 0.95) !important; color: #fff !important; }
+.patron-config-panel .jsPanel-btn-close svg,
+.patron-toolbox .jsPanel-btn-close svg { width: 12px; height: 12px; }
 /* The content fills the panel but has no radius of its own (and our cssText callback wipes
    the inline radius jsPanel sets) → its square corners cover the container's rounded ones.
    Round all four corners to match the panel/node radius (8px). */

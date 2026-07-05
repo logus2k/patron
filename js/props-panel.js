@@ -543,10 +543,32 @@
     if (tplPanel && typeof tplPanel.front === "function") tplPanel.front();
   }
 
+  // Conditional visibility: a field with `show_if: {other: value}` is shown ONLY when the
+  // sibling property `other` currently equals `value` (value may be a scalar or a list). This
+  // makes mutually-exclusive fields (e.g. JSON block inline `content` vs file `path`) hide the
+  // one that doesn't apply. No show_if → always visible.
+  function fieldVisible(node, f) {
+    const cond = f && f.show_if;
+    if (!cond) return true;
+    for (const key in cond) {
+      const want = cond[key];
+      const have = node.properties[key];
+      const ok = Array.isArray(want) ? want.map(String).includes(String(have))
+                                     : String(have) === String(want);
+      if (!ok) return false;
+    }
+    return true;
+  }
+  // True when some other field's visibility depends on `key` — so changing `key` must re-render.
+  function fieldDrivesVisibility(fields, key) {
+    return (fields || []).some((f) => f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key));
+  }
+
   // Render ONE field from the block's catalog metadata (f = {key, control, label, values,
-  // placeholder, min, max}). The control decides the input: text / number / select /
-  // textarea (multi-line prompt) / json (monospace + validation).
-  function fieldForSchema(node, f) {
+  // placeholder, min, max, show_if}). The control decides the input: text / number / select /
+  // textarea (multi-line prompt) / json (monospace + validation). `rerender` (optional) is
+  // called after a value change that can alter which fields are visible (a show_if driver).
+  function fieldForSchema(node, f, rerender) {
     const wrap = document.createElement("label");
     wrap.className = "pp-field";
     const cap = document.createElement("span");
@@ -668,7 +690,12 @@
         input.appendChild(o);
       }
       input.value = cur;
-      input.addEventListener("change", () => commitValue(node, f.key, input.value));
+      input.addEventListener("change", () => {
+        commitValue(node, f.key, input.value);
+        // If sibling fields hinge on this select (show_if), re-render so they show/hide now.
+        const fields = CATALOG && CATALOG[node.type];
+        if (rerender && fieldDrivesVisibility(fields, f.key)) rerender(node);
+      });
     } else if (control === "number") {
       input = document.createElement("input");
       input.type = "number";
@@ -770,7 +797,10 @@
     const fields = CATALOG && CATALOG[node.type];
     if (fields && fields.length) {
       preresolveRefs(node, fields); // fill sibling fields (e.g. target_name) SILENTLY before render
-      for (const f of fields) body.appendChild(fieldForSchema(node, f));
+      for (const f of fields) {
+        if (!fieldVisible(node, f)) continue; // hide mutually-exclusive fields (show_if)
+        body.appendChild(fieldForSchema(node, f, populate));
+      }
     } else if (node.widgets && node.widgets.length) {
       for (const w of node.widgets) body.appendChild(fieldFor(node, w));
     } else {
@@ -1060,7 +1090,11 @@
     const fields = CATALOG && CATALOG[node.type];
     if (fields && fields.length) {
       preresolveRefs(node, fields);
-      for (const f of fields) container.appendChild(fieldForSchema(node, f));
+      const rerender = () => renderBlockInto(container, node);
+      for (const f of fields) {
+        if (!fieldVisible(node, f)) continue; // hide mutually-exclusive fields (show_if)
+        container.appendChild(fieldForSchema(node, f, rerender));
+      }
     } else if (node.widgets && node.widgets.length) {
       for (const w of node.widgets) container.appendChild(fieldFor(node, w));
     } else {
