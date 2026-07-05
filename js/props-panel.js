@@ -1149,10 +1149,10 @@
         // 2px offset here as on the block. Base header offset is top:1px, plus dy.
         const src = window.PatronIcons && window.PatronIcons.fileFor(node.type);
         const dy = (window.PatronIcons && window.PatronIcons.dyFor(node.type)) || 0;
-        // Apply the same per-icon scale as the canvas/toolbox so the header icon shrinks with them
-        // (16px base). scaleFor defaults to 1 for un-scaled icons.
-        const sc = (window.PatronIcons && window.PatronIcons.scaleFor) ? window.PatronIcons.scaleFor(node.type) : 1;
-        const ico = src ? window.PatronIcons.maskSpan(src, Math.round(16 * sc),
+        // Canonical icon size (PatronIcons.sizeFor) — IDENTICAL to the toolbox + block-title icon,
+        // so the same icon is the same pixel size on all three surfaces.
+        const sz = (window.PatronIcons && window.PatronIcons.sizeFor) ? window.PatronIcons.sizeFor(node.type) : 16;
+        const ico = src ? window.PatronIcons.maskSpan(src, sz,
           "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:" + (1 + dy) + "px;") : "";
         return ico + '<span class="pttxt">' + (node.title || node.type) + " Configuration</span>";
       })(),

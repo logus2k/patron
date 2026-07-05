@@ -44,11 +44,18 @@
     return '<span class="icon-mask" style="width:' + size + 'px;height:' + size + 'px;' +
       (extra || "") + "-webkit-mask-image:url('" + src + "');mask-image:url('" + src + "')\"></span>";
   }
-  // Toolbox palette markup (was an <img> in a white badge → now a themed mask span).
-  function svgString(type, size) {
+  // ONE canonical rendered icon size for ALL surfaces (toolbox palette, block title on canvas,
+  // and the block's Configuration-panel header). Per-icon `scale` multiplies THIS single base so
+  // an icon is the SAME pixel size everywhere — no more three-different-sizes drift.
+  const ICON_PX = 18;
+  function sizeFor(type) { const ic = ICONS[type]; return Math.round(ICON_PX * ((ic && ic.scale) || 1)); }
+
+  // Toolbox palette markup (a themed CSS-mask span). `size` is ignored — the canonical sizeFor()
+  // governs so the toolbox matches the block + config-panel exactly.
+  function svgString(type /*, size (ignored) */) {
     const ic = ICONS[type];
     if (!ic || !ic.file) return "";
-    const s = Math.round((size || 24) * (ic.scale || 1)); // per-icon scale (some fill their viewBox)
+    const s = sizeFor(type);
     // Same per-icon vertical nudge as the canvas (ic.dy): CSS top +down / -up matches the sign.
     const extra = ic.dy ? ("position:relative;top:" + ic.dy + "px;") : "";
     return maskSpan(ic.file, s, extra);
@@ -89,7 +96,7 @@
     const ic = ICONS[type];
     const img = coloredImage(type, color || "#1d1d1d");
     if (!img || !img._ready) return;
-    const s = 18 * ((ic && ic.scale) || 1);
+    const s = sizeFor(type); // canonical size — identical to toolbox + config-panel
     const x = 10; // 4px accent stripe + 6px left padding before the icon
     const y = title_height * -0.5 - s * 0.5 + ((ic && ic.dy) || 0); // per-icon vertical nudge
     ctx.drawImage(img, x, y, s, s);
@@ -103,7 +110,7 @@
     maskSpan: maskSpan,
     fileFor: fileFor,
     dyFor: (t) => { const ic = ICONS[t]; return (ic && ic.dy) || 0; }, // per-icon vertical nudge (px, +down)
-    scaleFor: (t) => { const ic = ICONS[t]; return (ic && ic.scale) || 1; }, // per-icon size multiplier
+    sizeFor: sizeFor, // canonical rendered px for a type (ICON_PX × scale) — use for ALL surfaces
     drawTitleBox: drawTitleBox,
   };
 })(window);
