@@ -1257,10 +1257,11 @@
 
   // Colored file icon (icons/*.svg) for a panel header.
   // Panel-header icon: a themed CSS-mask span (var(--icon-fg)) — legible on both themes, no badge.
-  const panelImg = (src, size) =>
+  const panelImg = (src, size, top) =>
     (window.PatronIcons && window.PatronIcons.maskSpan)
       ? window.PatronIcons.maskSpan(src, size || 16,
-          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:-1px;")
+          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:" +
+            (top == null ? -1 : top) + "px;")
       : '<img src="' + src + '" width="' + (size || 16) + '" height="' + (size || 16) + '" alt="">';
 
   // --- floating Toolbox (jsPanel): the LEGO blocks --------------------------
@@ -1341,7 +1342,7 @@
       return;
     }
     outputPanel = jsPanel.create({
-      headerTitle: panelImg("icons/output.svg") + '<span class="pttxt">Output</span>',
+      headerTitle: panelImg("icons/output.svg", 16, 1) + '<span class="pttxt">Output</span>',
       theme: "none",
       borderRadius: "8px", /* match the litegraph node corner radius (round_radius = 8) */
       border: "1px solid var(--panel-border)",

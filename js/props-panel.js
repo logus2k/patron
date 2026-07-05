@@ -1130,10 +1130,13 @@
       : { width: isAgent ? 600 : 320, height: isAgent ? 490 : 380 };
     const jp = jsPanel.create({
       headerTitle: (function () {
-        // Show the block's OWN icon in the header, same spot as on the block's canvas title.
+        // Show the block's OWN icon in the header, same spot as on the block's canvas title —
+        // including the per-icon vertical nudge (ic.dy) so Text Send/Receive et al. sit the same
+        // 2px offset here as on the block. Base header offset is top:1px, plus dy.
         const src = window.PatronIcons && window.PatronIcons.fileFor(node.type);
+        const dy = (window.PatronIcons && window.PatronIcons.dyFor(node.type)) || 0;
         const ico = src ? window.PatronIcons.maskSpan(src, 16,
-          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:1px;") : "";
+          "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:" + (1 + dy) + "px;") : "";
         return ico + '<span class="pttxt">' + (node.title || node.type) + " Configuration</span>";
       })(),
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",

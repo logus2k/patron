@@ -102,6 +102,7 @@
     svgString: svgString,
     maskSpan: maskSpan,
     fileFor: fileFor,
+    dyFor: (t) => { const ic = ICONS[t]; return (ic && ic.dy) || 0; }, // per-icon vertical nudge (px, +down)
     drawTitleBox: drawTitleBox,
   };
 })(window);
