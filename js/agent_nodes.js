@@ -472,25 +472,31 @@
     Composite.title = "Workflow";
     Composite.desc = "A saved workflow referenced as one participant (nesting).";
 
-    // --- Data (JSON): emit a JSON object -------------------------------------
-    // A general flow SOURCE (out only). `source=inline` emits the literal `content`;
-    // `source=file` loads `path` off the RUNTIME filesystem at run time (same trust model as
-    // the File Initiator — no browser upload). Wire its out into an Agent's `vars` input to set
-    // the Agent's named template variables ({topic}, {n}); an INLINE Data block wired to `vars`
-    // is folded into the Agent's input.vars at deploy, a FILE source is pulled at runtime.
-    // Edited in the Properties panel (source=combo, content=json, path=text from /composer/catalog).
+    // --- Data: multi-format data source --------------------------------------
+    // A general flow SOURCE (out only). Loads a value in one of many `format`s — object
+    // (json/yaml/toml), tabular (csv/tsv/jsonl/parquet/xlsx), or document (markdown/text/html/
+    // xml/pdf) — either INLINE (`content`) or from a `path` on the RUNTIME filesystem (same trust
+    // model as the File Initiator; binary formats pdf/parquet/xlsx are file-only). Wire out into
+    // an Agent's `vars` input to set template variables ({topic}, {n}); an INLINE OBJECT source
+    // folds into the Agent's input.vars at deploy, other sources are pulled at runtime.
+    // Fields render from /composer/catalog (source/format=select, content=textarea, path=text;
+    // content/path visibility is driven by source+format via show_if).
+    const DATA_FORMATS = ["json", "yaml", "toml", "csv", "tsv", "jsonl",
+                          "parquet", "xlsx", "markdown", "text", "html", "xml", "pdf"];
     function DataBlock() {
       this.addOutput("out", TYPES.FLOW);
       this.addProperty("source", "inline");   // inline | file
+      this.addProperty("format", "json");     // json | yaml | csv | pdf | parquet | …
       this.addProperty("content", "{}");
       this.addProperty("path", "");
       comboW(this, "source", ["inline", "file"]);
+      comboW(this, "format", DATA_FORMATS);
       textW(this, "content");
       textW(this, "path");
       apply(this, COLOR);
     }
-    DataBlock.title = "JSON";
-    DataBlock.desc = "Emit a JSON object (inline literal or a runtime file). Wire into an Agent's 'vars' input to set its variables; also a general flow source.";
+    DataBlock.title = "Data";
+    DataBlock.desc = "Load data in many formats (JSON/YAML/CSV/Markdown/HTML/PDF/Parquet/…), inline or from a file. Wire into an Agent's 'vars' (object formats) or use as a general flow source.";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
     function destination(channel, defaultTarget, targetLabel, withOutput) {

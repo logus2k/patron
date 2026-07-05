@@ -31,7 +31,7 @@
     if (panel || typeof jsPanel === "undefined") return;
     panel = jsPanel.create({
       // Icon markup mirrors app.js panelImg() (not importable here) so all panel headers match.
-      headerTitle: '<img src="icons/trace.svg" width="16" height="16" style="vertical-align:bottom;margin-left:3px;margin-right:7px;margin-top:1px;position:relative" alt=""><span class="pttxt">Debug</span>',
+      headerTitle: '<img src="icons/bug.svg" width="16" height="16" style="vertical-align:bottom;margin-left:3px;margin-right:7px;margin-top:1px;position:relative" alt=""><span class="pttxt">Debug</span>',
       theme: "none", borderRadius: "8px", border: "1px solid var(--panel-border)",
       panelSize: { width: 460, height: 400 },
       position: { my: "right-bottom", at: "right-bottom", offsetX: -14, offsetY: -14 },
