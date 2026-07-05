@@ -564,6 +564,18 @@
     return (fields || []).some((f) => f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key));
   }
 
+  // The placeholder for a field, resolving a data-driven `placeholders_by` ({field, values}) against
+  // the CURRENT value of the sibling field (e.g. `content`'s example changes with `format`). Falls
+  // back to the static `placeholder`.
+  function fieldPlaceholder(node, f) {
+    const pb = f && f.placeholders_by;
+    if (pb && pb.field && pb.values) {
+      const ex = pb.values[String(node.properties[pb.field])];
+      if (ex != null) return ex;
+    }
+    return f && f.placeholder ? f.placeholder : "";
+  }
+
   // Render ONE field from the block's catalog metadata (f = {key, control, label, values,
   // placeholder, min, max, show_if}). The control decides the input: text / number / select /
   // textarea (multi-line prompt) / json (monospace + validation). `rerender` (optional) is
@@ -708,7 +720,8 @@
       input = document.createElement("textarea");
       input.rows = control === "json" ? 4 : 3;
       input.value = cur == null ? "" : String(cur);
-      if (f.placeholder) input.placeholder = f.placeholder;
+      const ta_ph = fieldPlaceholder(node, f);
+      if (ta_ph) input.placeholder = ta_ph;
       err = document.createElement("div");
       err.className = "pp-err";
       input.addEventListener("change", () => {
@@ -722,7 +735,8 @@
       input = document.createElement("input");
       input.type = "text";
       input.value = cur == null ? "" : String(cur);
-      if (f.placeholder) input.placeholder = f.placeholder;
+      const tx_ph = fieldPlaceholder(node, f);
+      if (tx_ph) input.placeholder = tx_ph;
       input.addEventListener("change", () => commitValue(node, f.key, input.value));
     }
     if (input.type === "checkbox") {
@@ -1135,7 +1149,10 @@
         // 2px offset here as on the block. Base header offset is top:1px, plus dy.
         const src = window.PatronIcons && window.PatronIcons.fileFor(node.type);
         const dy = (window.PatronIcons && window.PatronIcons.dyFor(node.type)) || 0;
-        const ico = src ? window.PatronIcons.maskSpan(src, 16,
+        // Apply the same per-icon scale as the canvas/toolbox so the header icon shrinks with them
+        // (16px base). scaleFor defaults to 1 for un-scaled icons.
+        const sc = (window.PatronIcons && window.PatronIcons.scaleFor) ? window.PatronIcons.scaleFor(node.type) : 1;
+        const ico = src ? window.PatronIcons.maskSpan(src, Math.round(16 * sc),
           "vertical-align:middle;margin-left:3px;margin-right:7px;position:relative;top:" + (1 + dy) + "px;") : "";
         return ico + '<span class="pttxt">' + (node.title || node.type) + " Configuration</span>";
       })(),

@@ -22,7 +22,7 @@
     "agent":           { file: "icons/robot.svg" },
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
-    "data":            { file: "icons/data.svg" },
+    "data":            { file: "icons/data.svg", scale: 0.778 }, // 4px smaller (canvas 18→14, toolbox 20→16)
     "transform":       { file: "icons/recycle-solid.svg" },
     "composite":       { file: "icons/workflow.svg" },
     "whatsapp":        { file: "icons/whatsapp.svg", scale: 0.944 },
@@ -103,6 +103,7 @@
     maskSpan: maskSpan,
     fileFor: fileFor,
     dyFor: (t) => { const ic = ICONS[t]; return (ic && ic.dy) || 0; }, // per-icon vertical nudge (px, +down)
+    scaleFor: (t) => { const ic = ICONS[t]; return (ic && ic.scale) || 1; }, // per-icon size multiplier
     drawTitleBox: drawTitleBox,
   };
 })(window);

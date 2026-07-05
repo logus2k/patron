@@ -487,7 +487,7 @@
       this.addOutput("out", TYPES.FLOW);
       this.addProperty("source", "inline");   // inline | file
       this.addProperty("format", "json");     // json | yaml | csv | pdf | parquet | …
-      this.addProperty("content", "{}");
+      this.addProperty("content", "");        // empty — the panel shows a per-format example placeholder
       this.addProperty("path", "");
       comboW(this, "source", ["inline", "file"]);
       comboW(this, "format", DATA_FORMATS);
