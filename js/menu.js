@@ -94,12 +94,14 @@ window.PATRON_MENU = [
     items: [
       // VS Code-style debugger, adapted to a flat workflow graph (one "Step" — no call depth for
       // Over/Into/Out). Commands wired in app.js → window.PatronDebug (js/debug-controls.js).
-      { label: "Start Debugging", shortcut: "F5", command: "run.start" },
-      { label: "Run Without Debugging", shortcut: "Ctrl+F5", command: "run.runNoDebug" },
-      { label: "Stop Debugging", shortcut: "Shift+F5", command: "run.stop", enabled: "debugging" },
-      { label: "Restart Debugging", shortcut: "Ctrl+Shift+F5", command: "run.restart", enabled: "debugging" },
+      // Shortcuts avoid the browser-reserved F5 family (reload) / F11 (fullscreen) / F12 (devtools):
+      // F8 is the "go" key (Start when idle, Continue when paused — VS Code F5 style), F9/F10 free.
+      { label: "Start Debugging", shortcut: "F8", command: "run.start" },
+      { label: "Run Without Debugging", shortcut: "Ctrl+F8", command: "run.runNoDebug" },
+      { label: "Stop Debugging", shortcut: "Shift+F8", command: "run.stop", enabled: "debugging" },
+      { label: "Restart Debugging", shortcut: "Ctrl+Shift+F8", command: "run.restart", enabled: "debugging" },
       { type: "separator" },
-      { label: "Continue", shortcut: "F5", command: "run.continue", enabled: "paused" },
+      { label: "Continue", command: "run.continue", enabled: "paused" },   // F8 resumes when paused
       { label: "Step", shortcut: "F10", command: "run.step", enabled: "paused" },
       { type: "separator" },
       { label: "Toggle Breakpoint", shortcut: "F9", command: "run.toggleBreakpoint" },

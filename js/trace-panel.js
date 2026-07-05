@@ -37,7 +37,7 @@
       position: { my: "right-bottom", at: "right-bottom", offsetX: -14, offsetY: -14 },
       boxShadow: 3,
       headerControls: { size: "xs", minimize: "remove", smallify: "remove", normalize: "remove", maximize: "remove" },
-      onclosed: function () { panel = null; body = null; if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", false); },
+      onclosed: function () { panel = null; body = null; if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", false); if (global.PatronDebug) global.PatronDebug.onPanelClose(); },
       callback: function (p) {
         p.content.style.cssText =
           "padding:0;overflow:auto;background:var(--panel);color:var(--text);" +
@@ -107,7 +107,7 @@
 
   global.PatronTrace = {
     push: push,
-    open: function () { ensurePanel(); if (panel) { panel.style.display = ""; if (panel.front) panel.front(); if (global.PatronApp && global.PatronApp.ensureOnScreen) global.PatronApp.ensureOnScreen(panel); render(); if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", true); } },
+    open: function () { ensurePanel(); if (panel) { panel.style.display = ""; if (panel.front) panel.front(); if (global.PatronApp && global.PatronApp.ensureOnScreen) global.PatronApp.ensureOnScreen(panel); render(); if (global.PatronApp && global.PatronApp.menuBar) global.PatronApp.menuBar.setContext("traceVisible", true); if (global.PatronDebug) global.PatronDebug.onPanelOpen(); } },
     close: function () { if (panel) panel.close(); },
     toggle: function () { if (panel) this.close(); else this.open(); },
     isOpen: function () { return !!panel; },

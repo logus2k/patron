@@ -3,10 +3,12 @@
  * debug_specification.md). Mirrors a VS Code debugger:
  *   • a "Run" menu (wired in app.js) drives start / run-without / stop / restart / continue / step
  *     and breakpoint commands here;
- *   • a floating top-center toolbar (mirrors the bottom-center #canvas-controls) shows while a run
- *     is active with Continue / Step / Stop / Restart + status;
- *   • BREAKPOINTS toggle on the selected canvas node (red marker); in Continue the run pauses only
- *     at enabled breakpoints. The Debug panel (js/trace-panel.js) shows the stack trace.
+ *   • a floating top-center toolbar (mirrors the bottom-center #canvas-controls) that appears while
+ *     the Debug panel is open OR a run is active. It has ▶ Start · Continue · Step · Stop · Restart,
+ *     each enabled/disabled by state — so you can start debugging right from the bar;
+ *   • BREAKPOINTS toggle on the selected canvas node (red gutter marker); in Continue the run pauses
+ *     only at enabled breakpoints. Breakpoints are PER PROJECT (cleared + reloaded on project open,
+ *     saved in the project's ui). The Debug panel (js/trace-panel.js) shows the stack trace.
  *
  * Backend: POST api/projects/<uid>/{fire|step|continue|stop|breakpoints}. Events (node.paused,
  * workflow.terminated) arrive via app.js's EventSource → onEvent().
@@ -14,11 +16,12 @@
 (function (global) {
   "use strict";
 
-  const breakpoints = new Set();   // compiled node ids ("<type>:<id>", e.g. "agent:2")
+  const breakpoints = new Set();   // compiled node ids ("<type>:<id>", e.g. "agent:2") — CURRENT project
   let bpEnabled = true;
   let debugUid = null, debugCid = null, lastTask = "";
   let paused = false, pausedNode = null;
-  let bar = null, statusEl = null;
+  let panelOpen = false;
+  let bar = null, statusEl = null, startBtn, contBtn, stepBtn, stopBtn, restartBtn;
 
   // --- helpers --------------------------------------------------------------
   function uid() {
@@ -31,11 +34,13 @@
   function redraw() { const c = canvas(); if (c) c.setDirty(true, true); }
   function setCtx() {
     const mb = menuBar();
-    if (!mb) return;
-    mb.setContext("debugging", !!debugCid);
-    mb.setContext("paused", !!paused);
-    mb.setContext("bpEnabled", bpEnabled);
-    mb.refresh();
+    if (mb) {
+      mb.setContext("debugging", !!debugCid);
+      mb.setContext("paused", !!paused);
+      mb.setContext("bpEnabled", bpEnabled);
+      mb.refresh();
+    }
+    syncBar();
   }
   async function post(path, bodyObj) {
     let res, j = {};
@@ -68,24 +73,30 @@
     bar = document.createElement("div");
     bar.id = "debug-bar";
     const dot = document.createElement("span"); dot.className = "db-dot";
-    statusEl = document.createElement("span"); statusEl.className = "db-status"; statusEl.textContent = "debug";
+    statusEl = document.createElement("span"); statusEl.className = "db-status"; statusEl.textContent = "ready";
     const sep = document.createElement("span"); sep.className = "db-sep";
-    bar.append(dot, statusEl, sep,
-      mkBtn("Continue", "Resume to the next breakpoint (F5)", function () { PD.cont(); }),
-      mkBtn("Step", "Run the next node, then pause (F10)", function () { PD.step(); }),
-      mkBtn("Stop", "Stop debugging (Shift+F5)", function () { PD.stop(); }),
-      mkBtn("Restart", "Restart debugging (Ctrl+Shift+F5)", function () { PD.restart(); }));
+    startBtn = mkBtn("▶ Start", "Start Debugging (F8)", function () { PD.start(); });
+    contBtn = mkBtn("Continue", "Resume to the next breakpoint (F8)", function () { PD.cont(); });
+    stepBtn = mkBtn("Step", "Run the next node, then pause (F10)", function () { PD.step(); });
+    stopBtn = mkBtn("Stop", "Stop debugging (Shift+F8)", function () { PD.stop(); });
+    restartBtn = mkBtn("Restart", "Restart debugging (Ctrl+Shift+F8)", function () { PD.restart(); });
+    bar.append(dot, statusEl, sep, startBtn, contBtn, stepBtn, stopBtn, restartBtn);
     document.body.appendChild(bar);
     return bar;
   }
-  function showBar() { ensureBar().classList.add("visible"); }
-  function hideBar() { if (bar) bar.classList.remove("visible"); }
-  function status(text, running) {
+  // Visibility (Debug panel open OR a run active) + per-state button enablement, in one place.
+  function syncBar() {
     ensureBar();
-    statusEl.textContent = text;
-    bar.classList.toggle("running", !!running);
+    const active = !!debugCid;
+    bar.classList.toggle("visible", panelOpen || active);
+    bar.classList.toggle("running", active && !paused);
+    startBtn.disabled = active;      // can't start a new run while one is live
+    contBtn.disabled = !paused;
+    stepBtn.disabled = !paused;
+    stopBtn.disabled = !active;
+    restartBtn.disabled = !active;
   }
-  function setBusy(b) { if (bar) bar.querySelectorAll("button").forEach(function (x) { x.disabled = b; }); }
+  function status(text) { ensureBar(); statusEl.textContent = text; }
 
   // --- breakpoint + paused markers (wrap LGraphCanvas.drawNode) --------------
   function installMarkers() {
@@ -110,7 +121,7 @@
         ctx.stroke();
         ctx.restore();
       }
-      // Paused-here highlight — a yellow arrow/outline around the whole node while paused on it.
+      // Paused-here highlight — a yellow outline around the whole node while paused on it.
       if (id === pausedNode) {
         ctx.save();
         ctx.strokeStyle = "#ffcc00";
@@ -147,25 +158,24 @@
     lastTask = task;
     debugUid = u;
     if (global.PatronTrace) global.PatronTrace.open();   // show the stack trace
-    if (debug) { paused = false; showBar(); status("starting…", true); setBusy(true); setCtx(); }
+    if (debug) { paused = false; status("starting…"); setCtx(); }
     const r = await fire(task, debug);
     if (!r.ok) {
       // 404 = the farm has no deployed record for this uid → the project isn't deployed.
       const msg = r.status === 404
         ? "Not deployed — run Build ▸ Deploy first (Debug runs the deployed graph)."
         : (r.body.detail || r.body.error || ("HTTP " + r.status));
-      if (debug) { status("⚠ " + msg, false); setBusy(true); }
+      if (debug) status("⚠ " + msg);
       else await dialog(msg);
       debugCid = null; setCtx(); return;
     }
     debugCid = debug ? r.body.cid : null;
-    if (debug) { status("run " + String(debugCid).slice(0, 8) + " starting…", true); setCtx(); }
+    if (debug) { status("run " + String(debugCid).slice(0, 8) + " starting…"); setCtx(); }
   }
   async function drive(verb) {
     if (!debugCid || !debugUid) return;
-    setBusy(true);
     const r = await post("api/projects/" + debugUid + "/" + verb, { cid: debugCid });
-    if (!r.ok) { status(verb + " failed: " + (r.body.error || ("HTTP " + r.status))); setBusy(false); }
+    if (!r.ok) { status(verb + " failed: " + (r.body.error || ("HTTP " + r.status))); }
   }
 
   // --- events (fed by app.js's EventSource) ---------------------------------
@@ -173,30 +183,29 @@
     if (!d || !d.event || d.cid !== debugCid) return;
     if (d.event === "node.paused") {
       paused = true; pausedNode = d.node || null;
-      showBar();
       status("⏸ before " + (d.node || "?") + (d.kind ? " (" + d.kind + ")" : "")
-        + (d.at_breakpoint ? "  ●" : ""), false);
-      setBusy(false); setCtx(); redraw();
+        + (d.at_breakpoint ? "  ●" : ""));
+      setCtx(); redraw();
     } else if (d.event === "workflow.terminated") {
       paused = false; pausedNode = null; debugCid = null;
-      status("■ ended (" + (d.reason || "done") + ")", false);
-      setBusy(true); setCtx(); redraw();
-      setTimeout(hideBar, 3000);
+      status("■ ended (" + (d.reason || "done") + ")");
+      setCtx(); redraw();
     }
   }
 
-  // --- public API (Run menu commands) ---------------------------------------
+  // --- public API -----------------------------------------------------------
   const PD = {
-    start: function () { begin(true); },
+    // F8 / ▶ Start — VS Code F5-style: resume if paused, else start (no-op if already running).
+    start: function () { if (paused) { PD.cont(); return; } if (debugCid) return; begin(true); },
     runNoDebug: function () { begin(false); },
-    stop: function () { if (debugCid) { drive("stop"); status("stopping…", false); } },
+    stop: function () { if (debugCid) { drive("stop"); status("stopping…"); } },
     restart: function () {
       const t = lastTask;
-      const doStart = function () { debugUid = uid(); if (!debugUid) return; showBar(); status("restarting…", true); setBusy(true); paused = false; fire(t, true).then(function (r) { if (r.ok) { debugCid = r.body.cid; setCtx(); } }); };
-      if (debugCid) { drive("stop"); setTimeout(doStart, 250); } else doStart();
+      const go = function () { debugUid = uid(); if (!debugUid) return; paused = false; status("restarting…"); setCtx(); fire(t, true).then(function (r) { if (r.ok) { debugCid = r.body.cid; setCtx(); } }); };
+      if (debugCid) { drive("stop"); setTimeout(go, 250); } else go();
     },
-    cont: function () { if (paused) { drive("continue"); status("running…", true); paused = false; setCtx(); } },
-    step: function () { if (paused) { drive("step"); setBusy(true); } },
+    cont: function () { if (paused) { drive("continue"); paused = false; status("running…"); setCtx(); } },
+    step: function () { if (paused) { drive("step"); } },
     toggleBreakpoint: function () {
       const nodes = selectedNodes();
       if (!nodes.length) { dialog("Select a block on the canvas first, then Toggle Breakpoint."); return; }
@@ -207,12 +216,25 @@
     disableAllBreakpoints: function () { bpEnabled = false; redraw(); pushBreakpoints(); setCtx(); },
     removeAllBreakpoints: function () { breakpoints.clear(); redraw(); pushBreakpoints(); },
     onEvent: onEvent,
+    // --- project scoping: breakpoints are per-project. app.js calls these on open/new/close +
+    //     reads getBreakpoints() to persist them into the project's saved ui. ---
+    onProjectOpen: function (newUid, savedBps) {
+      breakpoints.clear();
+      (savedBps || []).forEach(function (b) { breakpoints.add(b); });
+      bpEnabled = true;
+      // A different project → any in-flight debug UI no longer applies.
+      debugCid = null; paused = false; pausedNode = null;
+      redraw(); setCtx();
+    },
+    getBreakpoints: function () { return [...breakpoints]; },
+    // --- Debug panel open/close (from js/trace-panel.js) drives the bar's idle visibility. ---
+    onPanelOpen: function () { panelOpen = true; if (!debugCid) status("ready"); syncBar(); },
+    onPanelClose: function () { panelOpen = false; syncBar(); },
     activeCid: function () { return debugCid; },
     isDebugging: function () { return !!debugCid; },
     breakpoints: function () { return [...breakpoints]; },
   };
   global.PatronDebug = PD;
 
-  // Patch the canvas draw as soon as litegraph is present (this script loads after it).
-  installMarkers();
+  installMarkers();  // patch the canvas draw (this script loads after litegraph)
 })(window);

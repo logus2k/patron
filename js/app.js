@@ -627,6 +627,9 @@
         },
         blockRects: window.PatronApp.blockRects || {}, // per-block dedicated-panel positions
         selected: Object.keys(lgcanvas.selected_nodes || {}), // node ids of the current selection
+        // Debug breakpoints (compiled node ids) — persisted PER PROJECT so a reload restores them
+        // and they never leak into another project (js/debug-controls.js clears+loads on open).
+        breakpoints: (window.PatronDebug ? window.PatronDebug.getBreakpoints() : []),
         // Canvas-controls state: 3 modes = visible × pinned.
         controlsVisible: controlsVisible,
         controlsPinned: controlsPinned,
@@ -856,6 +859,8 @@
   function startEmptyProject() {
     graph.clear();
     setProjectName("Untitled Project");
+    // Empty scratch (boot / New / Close) → no breakpoints (clears any from a prior project).
+    if (window.PatronDebug) window.PatronDebug.onProjectOpen(null, []);
   }
   function showAbout() {
     const id = "patron-about-overlay";
@@ -966,6 +971,8 @@
   function applyProject(p) {
     applyWorkspace({ graph: p.graph, ui: p.ui });
     setCurrentProject(p);
+    // Load THIS project's saved breakpoints (per-project — never leak across projects).
+    if (window.PatronDebug) window.PatronDebug.onProjectOpen(p.uid, (p.ui && p.ui.breakpoints) || []);
     scheduleSave(); // persist the opened project as the current workspace identity
     startConsoleReceive(); // (re)open the live SSE for this project's Console (Receive) blocks
     graph.setDirtyCanvas(true, true);
@@ -1309,6 +1316,16 @@
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
         if (typeof ResizeObserver !== "undefined") new ResizeObserver(fit).observe(host);
       },
+      // The header × must HIDE the panel (like the View-menu toggle), not DESTROY it — otherwise
+      // `toolboxVisible` stays checked and toggleToolbox() then toggles display on a detached node
+      // so the Toolbox can never reshow. onbeforeclose returning FALSE aborts jsPanel's destroy;
+      // we hide + uncheck instead. (A plain click-interceptor is useless: on a real click jsPanel
+      // removes the button on pointerup, so the `click` event never fires.)
+      onbeforeclose: function (panel) {
+        panel.style.display = "none";
+        if (menuBar) { menuBar.setContext("toolboxVisible", false); menuBar.refresh(); }
+        return false;
+      },
     });
   }
 
@@ -1336,15 +1353,14 @@
       callback: (p) => {
         p.content.style.cssText = "padding:10px;overflow:auto;background:var(--panel);color:var(--text)";
         p.content.appendChild(inspectOut);
-        // The header × HIDES the panel (like the View‑menu toggle) and keeps the menu checkbox
-        // in sync — otherwise it stayed checked after close. Capture-phase + stopImmediate keeps
-        // jsPanel's own destroy handler from firing, so the panel is reused on reopen.
-        const x = p.querySelector(".jsPanel-btn-close");
-        if (x) x.addEventListener("click", function (e) {
-          e.preventDefault(); e.stopImmediatePropagation();
-          p.style.display = "none";
-          syncOutputMenu(false);
-        }, true);
+      },
+      // Header × HIDES (not destroys) so the panel is reused on reopen and the menu checkbox stays
+      // in sync. onbeforeclose→false aborts jsPanel's destroy; a click-interceptor is useless here
+      // because on a real click jsPanel removes the button on pointerup before `click` fires.
+      onbeforeclose: function (panel) {
+        panel.style.display = "none";
+        syncOutputMenu(false);
+        return false;
       },
     });
     outputPanel.style.display = "none"; // hidden by default — opened via 📄 Output / Compile
