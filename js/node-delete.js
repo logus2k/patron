@@ -21,9 +21,9 @@
     return;
   }
 
-  const HIT = 9;    // half-size of the clickable "×" hot-zone (graph px @ scale 1)
+  const HIT = 9;    // half-size of the clickable "×" hot-zone (graph px @ scale 1) — Ø16 badge
   const INSET = 13; // "×" center distance from the node's RIGHT edge
-  const ARM = 3.4;  // half-length of each stroke of the glyph
+  const ARM = 3.4;  // half-length of each stroke of the glyph (scaled with HIT)
 
   function titleH(node) {
     return node.title_height || (LiteGraph.NODE_TITLE_HEIGHT || 24);

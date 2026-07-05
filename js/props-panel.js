@@ -559,9 +559,25 @@
     }
     return true;
   }
-  // True when some other field's visibility depends on `key` — so changing `key` must re-render.
-  function fieldDrivesVisibility(fields, key) {
-    return (fields || []).some((f) => f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key));
+  // True when some other field DEPENDS on `key` (its visibility via show_if, its options via
+  // values_by, or its placeholder via placeholders_by) — so changing `key` must re-render the panel.
+  function fieldDrivesRerender(fields, key) {
+    return (fields || []).some((f) =>
+      (f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key)) ||
+      (f.values_by && f.values_by.field === key) ||
+      (f.placeholders_by && f.placeholders_by.field === key));
+  }
+
+  // The selectable options for an enum/select field, resolving a data-driven `values_by`
+  // ({field, values}) against the CURRENT value of the sibling field (e.g. `source` limited to
+  // ["file"] when `format` is binary). Falls back to the static `values`.
+  function fieldValues(node, f) {
+    const vb = f && f.values_by;
+    if (vb && vb.field && vb.values) {
+      const v = vb.values[String(node.properties[vb.field])];
+      if (Array.isArray(v)) return v;
+    }
+    return (f && f.values) || [];
   }
 
   // The placeholder for a field, resolving a data-driven `placeholders_by` ({field, values}) against
@@ -696,17 +712,25 @@
       input.addEventListener("change", () => commitValue(node, f.key, input.checked));
     } else if (control === "select") {
       input = document.createElement("select");
-      for (const v of f.values || []) {
+      const vals = fieldValues(node, f);   // may be narrowed by values_by (sibling-dependent)
+      for (const v of vals) {
         const o = document.createElement("option");
         o.value = v; o.textContent = v;
         input.appendChild(o);
       }
-      input.value = cur;
+      // If the current value is no longer allowed (e.g. source="inline" but format went binary),
+      // snap to the first allowed option and commit — so the state can never be invalid.
+      if (vals.length && !vals.map(String).includes(String(cur))) {
+        commitValue(node, f.key, vals[0]);
+        input.value = vals[0];
+      } else {
+        input.value = cur;
+      }
       input.addEventListener("change", () => {
         commitValue(node, f.key, input.value);
-        // If sibling fields hinge on this select (show_if), re-render so they show/hide now.
+        // If other fields depend on this select (visibility / options / placeholder), re-render.
         const fields = CATALOG && CATALOG[node.type];
-        if (rerender && fieldDrivesVisibility(fields, f.key)) rerender(node);
+        if (rerender && fieldDrivesRerender(fields, f.key)) rerender(node);
       });
     } else if (control === "number") {
       input = document.createElement("input");
