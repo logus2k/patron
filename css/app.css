@@ -362,15 +362,27 @@ html, body {
 .jsPanel .jsPanel-title { color: var(--text); font-size: 13px; }
 /* jsPanel defaults the title to small-caps — override to normal case. */
 .jsPanel-titlebar .jsPanel-title { font-variant: normal !important; }
-/* Normalized CLOSE button for ALL panels (Toolbox, Output, Debug, Configuration) — matches the
-   block's canvas "×" badge: a 16px dark translucent circle with a white ×, red on hover. */
+/* Normalized CLOSE button for ALL panels (Toolbox, Output, Debug, Configuration) — pixel-identical
+   to the block's canvas "×" badge (node-delete.js): Ø18 dark translucent circle, white ×, red on
+   hover. The × is drawn with CSS pseudo-elements using the block's EXACT geometry (arms at ±ARM
+   with ARM=3.4 → bar length 2·ARM·√2 ≈ 9.6px, stroke 1.6px, round caps) — jsPanel's own svg icon
+   has a different path/proportion, so we hide it and draw our own to match exactly. */
 .jsPanel .jsPanel-btn-close {
-  width: 20px; height: 20px; margin: auto 5px; padding: 0;
+  position: relative;
+  width: 18px; height: 18px; margin: auto 5px; padding: 0;
   display: inline-flex !important; align-items: center; justify-content: center;
   border-radius: 50% !important;
   background: rgba(0, 0, 0, 0.28) !important; color: #fff !important;
 }
 .jsPanel .jsPanel-btn-close:hover { background: rgba(220, 60, 50, 0.95) !important; color: #fff !important; }
+.jsPanel .jsPanel-btn-close svg { display: none !important; } /* hide jsPanel's built-in × icon */
+.jsPanel .jsPanel-btn-close::before,
+.jsPanel .jsPanel-btn-close::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 1.6px; height: 9.6px; border-radius: 0.8px; background: currentColor;
+}
+.jsPanel .jsPanel-btn-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+.jsPanel .jsPanel-btn-close::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 /* The content fills the panel but has no radius of its own (and our cssText callback wipes
    the inline radius jsPanel sets) → its square corners cover the container's rounded ones.
    Round all four corners to match the panel/node radius (8px). */
