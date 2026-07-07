@@ -113,18 +113,28 @@ html, body {
   margin-top: 0px;
   box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5) !important;
 }
-/* current open-project name, tucked directly under the "Project" menu item.
-   Left-aligned, not pinned to the top-right corner. */
-#project-name {
+/* One row just under the "Project" menu item: the open-project name followed immediately by the
+   deploy-status badge. Fixed-positioned; empty area passes clicks to the canvas (the badge itself
+   re-enables pointer events). */
+#project-row {
   position: fixed;
   top: 45px;
   left: 57px;
-  display: block;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: 92vw;
+  pointer-events: none;
+}
+#project-name {
   pointer-events: none;
   font-size: 16px;
   font-weight: 500;
   color: var(--text, #444);
   opacity: 0.7;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 40vw;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -629,22 +639,17 @@ html, body {
    modified / offline are clickable-for-detail (db-actionable). See status-badge.js.
    ============================================================================ */
 #deploy-badge {
-  position: fixed;
-  left: 12px;
-  bottom: 12px;
-  /* Above floating panels (jsPanel base z-index 100) so the status pill stays visible and
-     clickable even when the Toolbox/Output panel overlaps the bottom-left corner; still below
-     modal dialogs (backdrop z-index 9999) so a modal covers it. */
-  z-index: 5000;
+  flex: 0 0 auto;         /* sits in the #project-row flex, right after the project name */
+  pointer-events: auto;   /* clickable (opens the Output reason for actionable states) */
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 11px 5px 9px;
+  padding: 5px 8px 4px 7px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
   background: var(--panel);
   color: var(--text);
-  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: default;
@@ -653,8 +658,8 @@ html, body {
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 #deploy-badge .db-dot {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--muted);
   flex: 0 0 auto;

@@ -120,8 +120,8 @@ window.PATRON_MENU = [
       { label: "Canvas Controls", command: "view.controls", type: "checkbox", checked: "controlsVisible" },
       { type: "separator" },
       // Both themes shown; a checkbox marks the active one.
-      { label: "Dark Theme", command: "theme.dark", type: "checkbox", checked: "isDark" },
       { label: "White Theme", command: "theme.white", type: "checkbox", checked: "isLight" },
+      { label: "Dark Theme", command: "theme.dark", type: "checkbox", checked: "isDark" },
     ],
   },
   {

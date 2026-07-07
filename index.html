@@ -20,8 +20,6 @@
       <!-- pull-down menu bar (replaces the old toolbar buttons); rendered by
            MenuBar from the model in js/menu.js, wired to commands in app.js -->
       <div id="menubar"></div>
-      <!-- current open project name (top-right); the Phase-01 Project entity will drive it -->
-      <span id="project-name"></span>
     </header>
 
     <!-- the canvas fills the whole screen; the topbar + Toolbox/Output panels float over it -->
@@ -29,9 +27,12 @@
       <canvas id="graph-canvas" tabindex="1"></canvas>
     </main>
 
-    <!-- Deploy status badge (bottom-left): near-real-time deploy-readiness of the current
-         graph. Click a non-green badge to open the Output panel with the reason. -->
-    <button id="deploy-badge" type="button" title="Deploy status"></button>
+    <!-- Project name + deploy-status badge on one row, just under the "Project" menu item. The
+         badge shows near-real-time deploy-readiness; click a non-green badge to open the reason. -->
+    <div id="project-row">
+      <span id="project-name"></span>
+      <button id="deploy-badge" type="button" title="Deploy status"></button>
+    </div>
 
 
     <!-- vendored libraries -->
