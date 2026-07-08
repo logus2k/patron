@@ -61,6 +61,9 @@ TEMPLATE_WRITER = "/admin/tools/template-writer"
 RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", "http://127.0.0.1:6817").rstrip("/")
 # agent_scheduler admin API (localhost-published by its compose: 127.0.0.1:6816).
 SCHEDULER_URL = os.environ.get("AGENT_SCHEDULER_URL", "http://127.0.0.1:6816").rstrip("/")
+# stt_ingress audio ingest (the Mic control relays raw PCM16 here → it transcribes + fires).
+# On the shared docker network the service is reachable by name; override per environment.
+STT_INGRESS_URL = os.environ.get("STT_INGRESS_URL", "http://stt-ingress-app:6818").rstrip("/")
 
 # --- Multi-tenancy (documents/multi_tenancy.md §3) ---
 # The principal used when the edge proxy hasn't injected an identity (dev / direct access).
@@ -226,6 +229,16 @@ def _proj_from_body(uid, body, owner=None, owner_email=None):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    # Serve the voice assets with correct MIME: onnxruntime-web wants `application/wasm` for
+    # streaming instantiation, ES modules want a JS type, and the Silero model is opaque bytes.
+    extensions_map = {
+        **SimpleHTTPRequestHandler.extensions_map,
+        ".wasm": "application/wasm",
+        ".mjs": "text/javascript",
+        ".js": "text/javascript",
+        ".onnx": "application/octet-stream",
+    }
+
     def __init__(self, *a, **k):
         super().__init__(*a, directory=ROOT, **k)
 
@@ -434,6 +447,11 @@ class Handler(SimpleHTTPRequestHandler):
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/fire"):
             uid = p0[len(PROJECTS_API) + 1:-len("/fire")]
             return self._project_fire(uid)
+        # Mic control: relay a raw-PCM16 utterance to the deployed STT source (stt_ingress),
+        # which transcribes it server-side and fires the workflow — same path a web STT client uses.
+        if p0.startswith(PROJECTS_API + "/") and p0.endswith("/stt-audio"):
+            uid = p0[len(PROJECTS_API) + 1:-len("/stt-audio")]
+            return self._project_stt_audio(uid)
         if p0.startswith(PROJECTS_API + "/") and p0.endswith("/status"):
             uid = p0[len(PROJECTS_API) + 1:-len("/status")]
             return self._project_status(uid)
@@ -558,6 +576,38 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(e.code, {"ok": False, "error": f"agent_runtime {e.code}", "detail": detail})
         except urllib.error.URLError as e:
             return self._json(502, {"ok": False, "error": f"cannot reach agent_runtime at {RUNTIME_URL}: {e.reason}"})
+
+    def _project_stt_audio(self, uid):
+        """Mic control (Speech-to-Text block): relay one raw-PCM16@16k utterance to the deployed
+        STT source at ``stt_ingress POST /sources/<source>/audio``. The ingress transcribes it
+        (Socket.IO → Whisper) and fires the bound workflow — exactly what a raw-audio web STT
+        client does. Owner-gated by the project; ``?source=<stream_id>`` names the STT source.
+        Body is opaque bytes (NOT JSON), so this bypasses the JSON ``_http`` helper."""
+        from urllib.parse import quote, parse_qs, urlparse
+        if not _UID_RE.match(uid):
+            return self._json(400, {"ok": False, "error": "invalid uid"})
+        proj = _proj_read(uid)
+        if proj is not None and not _can_access(self._principal(), proj.get("owner"), self._principal_email()):
+            return self._json(403, {"ok": False, "error": "not authorized for this project"})
+        source = (parse_qs(urlparse(self.path).query).get("source") or [""])[0].strip()
+        if not source:
+            return self._json(400, {"ok": False, "error": "missing ?source=<stream_id>"})
+        n = int(self.headers.get("Content-Length") or 0)
+        audio = self.rfile.read(n) if n else b""
+        if not audio:
+            return self._json(400, {"ok": False, "error": "empty audio body"})
+        url = f"{STT_INGRESS_URL}/sources/{quote(source, safe='')}/audio"
+        ctype = self.headers.get("Content-Type", "application/octet-stream")
+        try:
+            req = urllib.request.Request(url, data=audio, headers={"Content-Type": ctype}, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as resp:  # transcription streams ~real-time
+                raw = resp.read()
+                return self._json(resp.status, json.loads(raw) if raw else {})
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            return self._json(e.code, {"ok": False, "error": f"stt_ingress {e.code}", "detail": detail})
+        except urllib.error.URLError as e:
+            return self._json(502, {"ok": False, "error": f"cannot reach stt_ingress at {STT_INGRESS_URL}: {e.reason}"})
 
     def _project_debug(self, uid, verb):
         """Debug control: relay ``POST /api/projects/<uid>/{step|continue|stop|breakpoints}`` to

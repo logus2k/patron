@@ -324,8 +324,19 @@
     // --- STT Initiator: fires when incoming speech is transcribed to text -----
     function SttInitiator() {
       this.addOutput("out", TYPES.FLOW);
-      this.addProperty("source", "");
-      textW(this, "source");
+      // Property key MUST match the /composer/catalog ConfigField (blocks.py SttInitiator
+      // uses `stream_id`) — the props panel + deploy binding both key off `stream_id`. An
+      // older `source` key here was orphaned (panel wrote stream_id, canvas widget wrote
+      // source, deploy read a third), so the STT source_id never bound. Aligned on stream_id.
+      this.addProperty("stream_id", "");
+      textW(this, "stream_id");
+      // Mic toggle: hands-free VAD capture → POST each utterance to the deployed STT source
+      // (/sources/<stream_id>/audio). Fires the workflow exactly as a web STT client would.
+      const mic = this.addWidget("button", "🎤 Mic: off", null, () => {
+        if (window.PatronVoice) window.PatronVoice.toggleMic(this, mic);
+      });
+      mic.type = "patron/button";
+      mic.draw = drawButton;
       apply(this, INIT);
     }
     SttInitiator.title = "Speech-to-Text";
@@ -499,7 +510,7 @@
     DataBlock.desc = "Load data in many formats (JSON/YAML/CSV/Markdown/HTML/PDF/Parquet/…), inline or from a file. Wire into an Agent's 'vars' (object formats) or use as a general flow source.";
 
     // --- Destinations: in-only sinks; the "where" -----------------------------
-    function destination(channel, defaultTarget, targetLabel, withOutput) {
+    function destination(channel, defaultTarget, targetLabel, withOutput, withSpeaker) {
       function Dest() {
         this.addInput("in", TYPES.FLOW);
         // Optional pass-through OUT: a destination that ALSO hands its delivered content
@@ -521,6 +532,16 @@
         w.editKind = "text";
         w.type = "patron/field";
         w.draw = global.PatronDrawField;
+        // Speaker toggle (TTS only): register THIS browser as an audio consumer on
+        // /tts/socket.io under the block's `target` id — the same id the farm's TTS delivery
+        // synthesizes to — so a developer hears exactly what a real web listener will hear.
+        if (withSpeaker) {
+          const spk = this.addWidget("button", "🔊 Speaker: off", null, () => {
+            if (window.PatronVoice) window.PatronVoice.toggleSpeaker(this, spk);
+          });
+          spk.type = "patron/button";
+          spk.draw = drawButton;
+        }
         // Size from content (like every other block) so BOTH fields fit with proper bottom
         // margin — the old hard-coded height left the 2nd field flush against the border.
         apply(this, DEST);
@@ -533,7 +554,7 @@
     // the fixture); the label is the placeholder hint.
     const WhatsApp = destination("whatsapp", "", "chat id");
     WhatsApp.title = "WhatsApp";
-    const Tts = destination("tts", "", "voice/session");
+    const Tts = destination("tts", "", "voice/session", false, true);
     Tts.title = "Text-to-Speech";
     const Bus = destination("bus", "", "stream id");
     Bus.title = "Event Bus";

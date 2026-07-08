@@ -857,6 +857,7 @@
   // The empty starting state (first run + Close Project): a blank canvas titled
   // "Untitled Project", no example seeded. Kept message-free for the boot path.
   function startEmptyProject() {
+    if (window.PatronVoice) window.PatronVoice.stopAll();   // stop any live mic/speaker first
     graph.clear();
     setProjectName("Untitled Project");
     // Empty scratch (boot / New / Close) → no breakpoints (clears any from a prior project).
@@ -969,6 +970,7 @@
     inspectOut.textContent = "New project — unsaved. Save (or Save As) to store it.";
   }
   function applyProject(p) {
+    if (window.PatronVoice) window.PatronVoice.stopAll();   // stop any prior project's mic/speaker
     applyWorkspace({ graph: p.graph, ui: p.ui });
     setCurrentProject(p);
     // Load THIS project's saved breakpoints (per-project — never leak across projects).

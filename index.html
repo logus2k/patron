@@ -51,6 +51,11 @@
     <!-- in-app modal dialogs (replace browser prompt()/confirm()); no deps, load early -->
     <script src="js/dialogs.js"></script>
     <script src="vendor/jspanel/jspanel.min.js"></script>
+    <!-- Voice controls deps (reused from cv/widget): onnxruntime-web + Silero VAD for the Mic's
+         hands-free endpointing, socket.io for the Speaker's /tts consumer. ort before vad. -->
+    <script src="vendor/onnxruntime-web/ort.wasm.min.js"></script>
+    <script src="vendor/vad/bundle.min.js"></script>
+    <script src="vendor/socket.io.min.js"></script>
     <!-- composer authoring vocabulary (node types == agent_runtime composer blocks) -->
     <script src="js/agent_nodes.js"></script>
     <!-- pull-down menu bar (vendored from noted) + its data model -->
@@ -75,5 +80,7 @@
     <script src="js/trace-panel.js"></script>
     <!-- Debug controls: Run menu commands + floating debug bar + breakpoints (window.PatronDebug) -->
     <script src="js/debug-controls.js"></script>
+    <!-- Mic (STT block) + Speaker (TTS block) voice controls (window.PatronVoice) -->
+    <script src="js/voice-controls.js"></script>
   </body>
 </html>
