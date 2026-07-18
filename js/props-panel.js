@@ -560,11 +560,13 @@
     return true;
   }
   // True when some other field DEPENDS on `key` (its visibility via show_if, its options via
-  // values_by, or its placeholder via placeholders_by) — so changing `key` must re-render the panel.
+  // values_by, the items of a grounded picker via scope_by, or its placeholder via
+  // placeholders_by) — so changing `key` must re-render the panel.
   function fieldDrivesRerender(fields, key) {
     return (fields || []).some((f) =>
       (f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key)) ||
       (f.values_by && f.values_by.field === key) ||
+      (f.scope_by && f.scope_by.field === key) ||
       (f.placeholders_by && f.placeholders_by.field === key));
   }
 
@@ -606,7 +608,8 @@
 
     const cur = node.properties[f.key];
     const control = f.control || "text";
-    let input, err, extra;
+    // `pre` renders ABOVE the control (a scope_by search box); `extra` renders below it.
+    let input, err, extra, pre;
 
     if (control === "resource-ref") {
       // GENERIC grounded picker for ANY declared resource (kind = resource id). Descriptor
@@ -631,6 +634,10 @@
           }
           populate(node); // re-render sibling fields (e.g. target_name)
         }
+        // A grounded pick can ALSO drive other fields — e.g. choosing `server` narrows the
+        // `tool` list via scope_by. Same rule the plain select control already applies.
+        const fields = CATALOG && CATALOG[node.type];
+        if (rerender && fieldDrivesRerender(fields, f.key)) rerender(node);
       };
       if (desc && desc.multi) {
         // multi-select → summary box + "…" opens the shared searchable checklist panel
@@ -659,9 +666,7 @@
         input.addEventListener("change", () => commitValue(node, f.key, input.value));
       } else {
         input = document.createElement("select");
-        input.appendChild(new Option("— select —", ""));
         const allowFree = !!(desc && desc.allow_free);
-        if (allowFree) input.appendChild(new Option("Type an id…", "__type__"));
         const vals = items.map((it) => String(it[idKey]));
         const optFor = (it) => {
           const v = String(it[idKey]);
@@ -669,17 +674,59 @@
           return new Option(lab === v ? v : lab + " — " + v, v);
         };
         const groupBy = desc && desc.group_by;
-        if (groupBy) {
-          const groups = {};
-          for (const it of items) { const g = String(it[groupBy] || "other"); (groups[g] = groups[g] || []).push(it); }
-          for (const g of Object.keys(groups)) {
-            const og = document.createElement("optgroup");
-            og.label = g.charAt(0).toUpperCase() + g.slice(1) + "s";
-            for (const it of groups[g]) og.appendChild(optFor(it));
-            input.appendChild(og);
+
+        // `scope_by` ({field, item}): by DEFAULT the list is narrowed to the items belonging
+        // to a sibling field's current value (e.g. only the selected server's tools). A search
+        // OVERRIDES that scope and matches across ALL items, so a tool on another host is still
+        // reachable without switching servers first; clearing the search returns to the scope.
+        const scope = f.scope_by || null;
+        const scopeVal = scope ? String(node.properties[scope.field] || "").trim() : "";
+        let searchBox = null;
+        const visibleItems = (q) => {
+          const query = (q || "").trim().toLowerCase();
+          if (query) {
+            return items.filter((it) =>
+              Object.keys(it).some((k) => String(it[k] || "").toLowerCase().includes(query)));
           }
-        } else {
-          for (const it of items) input.appendChild(optFor(it));
+          if (scope && scopeVal) {
+            return items.filter((it) => String(it[scope.item] || "") === scopeVal);
+          }
+          return items;
+        };
+        const fillOptions = (list) => {
+          input.innerHTML = "";
+          input.appendChild(new Option("— select —", ""));
+          if (allowFree) input.appendChild(new Option("Type an id…", "__type__"));
+          if (groupBy) {
+            const groups = {};
+            for (const it of list) { const g = String(it[groupBy] || "other"); (groups[g] = groups[g] || []).push(it); }
+            for (const g of Object.keys(groups)) {
+              const og = document.createElement("optgroup");
+              og.label = g;   // the raw key (a server key is an id, not a word to pluralize)
+              for (const it of groups[g]) og.appendChild(optFor(it));
+              input.appendChild(og);
+            }
+          } else {
+            for (const it of list) input.appendChild(optFor(it));
+          }
+        };
+        fillOptions(visibleItems(""));
+
+        if (scope) {
+          // The search sits directly above the dropdown it filters.
+          searchBox = document.createElement("input");
+          searchBox.type = "search";
+          searchBox.className = "pp-input";
+          searchBox.style.marginBottom = "6px";
+          searchBox.placeholder = scopeVal
+            ? "Search all servers… (empty = " + scopeVal + " only)"
+            : "Search…";
+          searchBox.addEventListener("input", () => {
+            const keep = input.value;
+            fillOptions(visibleItems(searchBox.value));
+            // Preserve the current selection if it survived the filter.
+            if (keep && [...input.options].some((o) => o.value === keep)) input.value = keep;
+          });
         }
         const known = vals.includes(String(cur));
         let idBox = null;
@@ -697,6 +744,7 @@
           else { if (idBox) idBox.style.display = "none"; applyPick(input.value); }
         });
         if (idBox) { idBox.addEventListener("change", () => applyPick(idBox.value)); extra = idBox; }
+        if (searchBox) pre = searchBox;   // the scope_by search renders above the dropdown
       }
     } else if (control === "template") {
       // Merged Template Studio: the full {var}-chips editor + co-author, rendered INLINE here
@@ -773,6 +821,7 @@
         (input.tagName === "TEXTAREA" ? " pp-area" : "") +
         (control === "json" ? " pp-mono" : "");
     }
+    if (pre) wrap.appendChild(pre);
     wrap.appendChild(input);
     if (err) wrap.appendChild(err);
     if (extra) wrap.appendChild(extra);

@@ -70,6 +70,16 @@
     typeSel.addEventListener("change", () => { curType = typeSel.value; q = ""; loadItems(curType); });
     const search = document.createElement("input"); search.type = "search"; search.className = "pp-input"; search.placeholder = "Filter…"; search.value = q;
     bar.appendChild(typeSel); bar.appendChild(search);
+    // "+ New" only for resources that declare the create capability (e.g. MCP servers) —
+    // a read-only catalogue like the tool lists must not offer it.
+    const curDesc = (CAT || []).find((r) => r.id === curType);
+    if (curDesc && (curDesc.capabilities || []).indexOf("create") !== -1) {
+      const addBtn = document.createElement("button");
+      addBtn.type = "button"; addBtn.className = "pp-btn"; addBtn.textContent = "+ New";
+      addBtn.title = "Add a " + curDesc.label;
+      addBtn.addEventListener("click", () => editItem(curDesc, {}, true));
+      bar.appendChild(addBtn);
+    }
     body.appendChild(bar);
 
     const table = document.createElement("div"); table.className = "rm-list"; body.appendChild(table);
@@ -90,40 +100,59 @@
   // Inline schema-driven edit form (replaces the list; "← Back" returns). Renders the
   // descriptor's schema fields that are present on the item (identity excluded), submits a
   // PUT /resources/<id>/<key>. Used for editable resources (e.g. a trigger's cron/timezone).
-  function editItem(d, item) {
+  // ``isNew`` turns the same form into a CREATE form: the identity field becomes editable
+  // (it is the new item's key) and every schema field is offered, since there is no existing
+  // item to take the field set from. Both paths submit the same PUT — with a client-supplied
+  // key, PUT is an upsert, so create and edit are one code path and one endpoint.
+  function editItem(d, item, isNew) {
     if (!body) return;
     body.innerHTML = "";
     const bar = document.createElement("div"); bar.className = "rm-bar";
     const back = document.createElement("button"); back.type = "button"; back.className = "pp-btn"; back.textContent = "← Back";
     back.addEventListener("click", () => render());
-    const title = document.createElement("span"); title.className = "rm-count"; title.textContent = "Edit " + d.label + " · " + item[d.identity];
+    const title = document.createElement("span"); title.className = "rm-count";
+    title.textContent = isNew ? "New " + d.label : "Edit " + d.label + " · " + item[d.identity];
     bar.appendChild(back); bar.appendChild(title);
     body.appendChild(bar);
 
     const form = document.createElement("div"); form.className = "rm-form";
     const inputs = {};
     for (const f of (d.schema || [])) {
-      if (f.key === d.identity) continue;
-      if (item[f.key] === undefined) continue; // only fields present on the item (editable ones)
+      if (!isNew && f.key === d.identity) continue;
+      if (!isNew && item[f.key] === undefined) continue; // only fields present on the item
       const wrap = document.createElement("label"); wrap.className = "pp-field";
       const cap = document.createElement("span"); cap.className = "pp-label"; cap.textContent = f.label || f.key; wrap.appendChild(cap);
       const inp = document.createElement("input"); inp.type = "text"; inp.className = "pp-input";
       inp.value = item[f.key] == null ? "" : String(item[f.key]);
+      if (f.placeholder) inp.placeholder = f.placeholder;
       wrap.appendChild(inp); form.appendChild(wrap); inputs[f.key] = inp;
     }
     body.appendChild(form);
 
     const foot = document.createElement("div"); foot.className = "rm-foot";
-    const save = document.createElement("button"); save.type = "button"; save.className = "pp-btn"; save.textContent = "Save";
+    const save = document.createElement("button"); save.type = "button"; save.className = "pp-btn"; save.textContent = isNew ? "Create" : "Save";
     const status = document.createElement("span"); status.style.marginLeft = "10px";
     save.addEventListener("click", async () => {
-      save.disabled = true; foot.className = "rm-foot"; status.textContent = "saving…";
+      // The key comes from the typed identity when creating, else from the existing item.
+      const key = isNew
+        ? String((inputs[d.identity] && inputs[d.identity].value) || "").trim()
+        : item[d.identity];
+      if (!key) {
+        foot.className = "rm-foot rm-err";
+        status.textContent = (d.identity || "key") + " is required";
+        return;
+      }
+      save.disabled = true; foot.className = "rm-foot"; status.textContent = isNew ? "creating…" : "saving…";
       const payload = {}; for (const k in inputs) payload[k] = inputs[k].value;
-      const res = await fetch("resources/" + encodeURIComponent(d.id) + "/" + encodeURIComponent(item[d.identity]), {
+      const res = await fetch("resources/" + encodeURIComponent(d.id) + "/" + encodeURIComponent(key), {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
       if (res && res.ok) { render(); loadItems(curType); }
-      else { foot.className = "rm-foot rm-err"; status.textContent = "save failed: " + ((res && res.error) || "error"); save.disabled = false; }
+      else {
+        foot.className = "rm-foot rm-err";
+        status.textContent = (isNew ? "create" : "save") + " failed: " + ((res && res.error) || "error");
+        save.disabled = false;
+      }
     });
     foot.appendChild(save); foot.appendChild(status);
     body.appendChild(foot);

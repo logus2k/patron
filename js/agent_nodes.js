@@ -504,6 +504,29 @@
     GraphDatabase.title = "Graph Database";
     GraphDatabase.desc = "Query a knowledge graph (noted-graph); outputs entities/relationships. Not agent-coupled.";
 
+    // --- MCP Tool: ONE deterministic tool call (no LLM) -----------------------
+    // An Agent reaches tools by reasoning; this calls one tool outright — for the
+    // steps that are not judgments (fetch data, compute a metric, read/write state).
+    // `tool` is picked from the live catalogue (grounded resource-ref, grouped by
+    // server); the namespaced name `<server>__<tool>` also selects which MCP host to
+    // call. `arguments` is a JSON object whose string values accept {placeholders}
+    // resolved from the firing vars / incoming value.
+    function MCPServer() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("server", "");
+      this.addProperty("tool", "");
+      this.addProperty("arguments", "{}");
+      this.addProperty("result_format", "text");
+      textW(this, "server");
+      textW(this, "tool");
+      textW(this, "arguments");
+      textW(this, "result_format");
+      apply(this, COLOR);
+    }
+    MCPServer.title = "MCP Server";
+    MCPServer.desc = "Call one MCP tool deterministically (no LLM): external I/O and computation inside a graph.";
+
     // --- Composite: a workflow-as-a-block (nesting) ---------------------------
     function Composite() {
       this.addInput("in", TYPES.FLOW);
@@ -609,6 +632,7 @@
       ["transform", Transform],
       ["vector_query", VectorDatabase],
       ["graph_query", GraphDatabase],
+      ["mcp", MCPServer],
       ["ingestion", Ingestion],
       ["data", DataBlock],
       ["composite", Composite],
@@ -642,6 +666,7 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
+      { type: "mcp", label: "MCP Server" },
       { type: "ingestion", label: "Ingestion" },
       { type: "data", label: "Data Source" },
       { type: "transform", label: "Data Transformation", disabled: true },

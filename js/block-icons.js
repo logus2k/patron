@@ -23,6 +23,8 @@
     "vector_query":    { file: "icons/vector-three.svg" },
     "graph_query":     { file: "icons/graph-light.svg" },
     "ingestion":       { file: "icons/file-input.svg" },
+    // MCP: one deterministic tool call (no LLM). Same icon as the MCP Tool resource.
+    "mcp":             { file: "icons/connectors.svg" },
     "data":            { file: "icons/data.svg", scale: 0.778 }, // 4px smaller (canvas 18→14, toolbox 20→16)
     "transform":       { file: "icons/recycle-solid.svg" },
     "composite":       { file: "icons/workflow.svg" },
