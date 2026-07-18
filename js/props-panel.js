@@ -559,6 +559,55 @@
     }
     return true;
   }
+  // Build a starter argument object from a tool's JSON Schema: every declared property,
+  // required ones first, seeded with a value of the right shape (a declared default when the
+  // tool offers one). This is what turns "{}" into a filled-in form the author can edit,
+  // instead of a blank object they have to guess at.
+  function skeletonFromSchema(schema) {
+    const props = (schema && schema.properties) || {};
+    const required = new Set((schema && schema.required) || []);
+    const keys = Object.keys(props).sort((a, b) => (required.has(b) ? 1 : 0) - (required.has(a) ? 1 : 0));
+    const out = {};
+    for (const k of keys) {
+      const p = props[k] || {};
+      if (p.default !== undefined) { out[k] = p.default; continue; }
+      const t = Array.isArray(p.type) ? p.type[0] : p.type;
+      out[k] = t === "integer" || t === "number" ? 0
+             : t === "boolean" ? false
+             : t === "array" ? []
+             : t === "object" ? {}
+             : "";
+    }
+    return out;
+  }
+
+  // A compact, readable rendering of the same contract: name, type, required, description.
+  function schemaHintLines(schema) {
+    const props = (schema && schema.properties) || {};
+    const required = new Set((schema && schema.required) || []);
+    return Object.keys(props).map((k) => {
+      const p = props[k] || {};
+      const t = Array.isArray(p.type) ? p.type.join("|") : (p.type || "any");
+      const req = required.has(k) ? " · required" : "";
+      const def = p.default !== undefined ? " · default " + JSON.stringify(p.default) : "";
+      const desc = p.description ? " — " + p.description : "";
+      return k + " (" + t + ")" + req + def + desc;
+    });
+  }
+
+  // Look up the item currently selected in another field (used by fills_template/schema_hint).
+  function selectedItemOf(node, fields, siblingKey) {
+    const f = (fields || []).find((x) => x.key === siblingKey);
+    if (!f) return null;
+    const desc = RESOURCES && RESOURCES[f.kind];
+    const items = RESOURCE_ITEMS[f.kind];
+    if (!desc || !items || !items.length) { if (f.kind) loadResourceItems(f.kind); return null; }
+    const idKey = desc.identity || "id";
+    const cur = node.properties[f.key];
+    if (!cur) return null;
+    return items.find((it) => String(it[idKey]) === String(cur)) || null;
+  }
+
   // True when some other field DEPENDS on `key` (its visibility via show_if, its options via
   // values_by, the items of a grounded picker via scope_by, or its placeholder via
   // placeholders_by) — so changing `key` must re-render the panel.
@@ -567,6 +616,7 @@
       (f.show_if && Object.prototype.hasOwnProperty.call(f.show_if, key)) ||
       (f.values_by && f.values_by.field === key) ||
       (f.scope_by && f.scope_by.field === key) ||
+      (f.schema_hint && f.schema_hint.field === key) ||
       (f.placeholders_by && f.placeholders_by.field === key));
   }
 
@@ -633,6 +683,18 @@
             if (v != null && String(v) !== "") commitValue(node, sib, String(v));
           }
           populate(node); // re-render sibling fields (e.g. target_name)
+        }
+        // Picking a tool seeds its arguments: the author sees the real parameter names
+        // instead of an empty object. Only fills when the target is still empty/{} —
+        // an authored payload is never overwritten by changing the selection.
+        const ft = f.fills_template;
+        if (ft && ft.field) {
+          const item = (items || []).find((x) => String(x[idKey]) === String(value));
+          const schema = item && item[ft.from || "input_schema"];
+          const cur = String(node.properties[ft.field] || "").trim();
+          if (schema && (cur === "" || cur === "{}")) {
+            commitValue(node, ft.field, JSON.stringify(skeletonFromSchema(schema), null, 2));
+          }
         }
         // A grounded pick can ALSO drive other fields — e.g. choosing `server` narrows the
         // `tool` list via scope_by. Same rule the plain select control already applies.
@@ -825,6 +887,33 @@
     wrap.appendChild(input);
     if (err) wrap.appendChild(err);
     if (extra) wrap.appendChild(extra);
+
+    // `schema_hint`: spell out the parameter contract of the tool selected in a sibling
+    // field, right under the payload the author has to write. The information was always
+    // published by the tool — this is just the first place it is actually shown.
+    if (f.schema_hint && f.schema_hint.field) {
+      const fields = CATALOG && CATALOG[node.type];
+      const item = selectedItemOf(node, fields, f.schema_hint.field);
+      const schema = item && item[f.schema_hint.item || "input_schema"];
+      const lines = schema ? schemaHintLines(schema) : [];
+      if (lines.length) {
+        const hint = document.createElement("div");
+        hint.className = "pp-hint";
+        hint.style.cssText =
+          "margin-top:6px;font-size:11px;line-height:1.5;opacity:.75;" +
+          "border-left:2px solid var(--panel-border,#8884);padding-left:8px";
+        const head = document.createElement("div");
+        head.style.cssText = "font-weight:600;opacity:.9;margin-bottom:2px";
+        head.textContent = "parameters";
+        hint.appendChild(head);
+        for (const l of lines) {
+          const row = document.createElement("div");
+          row.textContent = l;
+          hint.appendChild(row);
+        }
+        wrap.appendChild(hint);
+      }
+    }
     return wrap;
   }
 
@@ -844,12 +933,24 @@
     for (const f of fields) {
       if ((f.control || "") !== "resource-ref") continue;
       const desc = RESOURCES[f.kind];
-      if (!desc || !desc.sets || !Object.keys(desc.sets).length) continue;
+      if (!desc) continue;
+      const idKey = desc.identity || "id";
+      const items = RESOURCE_ITEMS[f.kind];
+
+      // `default_first`: preselect the first available item when the field is still empty.
+      // With a single MCP server there is nothing to choose, and leaving it blank would also
+      // leave anything scoped to it (the tool list) unscoped. Silent, like the rest of this
+      // pass — opening a panel must never dirty the graph; the value persists as soon as the
+      // user touches anything.
+      if (f.default_first && !node.properties[f.key]) {
+        if (!items || !items.length) loadResourceItems(f.kind);   // re-renders on arrival
+        else if (items[0] && items[0][idKey] != null) silentSet(node, f.key, String(items[0][idKey]));
+      }
+
+      if (!desc.sets || !Object.keys(desc.sets).length) continue;
       const cur = node.properties[f.key];
       if (!cur) continue;
-      const items = RESOURCE_ITEMS[f.kind];
       if (!items || !items.length) { loadResourceItems(f.kind); continue; }
-      const idKey = desc.identity || "id";
       const it = items.find((x) => String(x[idKey]) === String(cur));
       if (!it) continue;
       for (const sib in desc.sets) {
