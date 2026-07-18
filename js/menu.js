@@ -61,6 +61,7 @@ window.PATRON_MENU = [
         { label: "Agent", command: "insert.agent" },
         { label: "Vector Database", command: "insert.vector_query" },
         { label: "Graph Database", command: "insert.graph_query" },
+        { label: "Ingestion", command: "insert.ingestion" },
         { label: "Data Source", command: "insert.data" },
         { label: "Data Transformation", command: "insert.transform" },
         { label: "Workflow", command: "insert.composite" },

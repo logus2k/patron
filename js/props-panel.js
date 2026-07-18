@@ -1123,6 +1123,9 @@
     if (node && node.type === "agent" && window.PatronAgentConfig) {
       window.PatronAgentConfig.render(container, node); return;
     }
+    if (node && node.type === "ingestion" && window.PatronIngestionConfig) {
+      window.PatronIngestionConfig.render(container, node); return;
+    }
     container.innerHTML = "";
     // No block-name heading in the body — the panel title already carries "<Block> Configuration".
     const fields = CATALOG && CATALOG[node.type];
@@ -1162,10 +1165,11 @@
       : { my: "left-top", at: "left-top", offsetX: 340 + cascade * 26, offsetY: 92 + cascade * 26 };
     // The Agent block's config is TABBED and carries the inline Template Studio, so it gets a
     // larger default (600×490) than the flat-list blocks (320×380). A saved rect still wins.
-    const isAgent = node.type === "agent";
+    // The tabbed panels (Agent, Ingestion) need room; the flat list does not.
+    const isRich = node.type === "agent" || node.type === "ingestion";
     const panelSize = (r && r.width && r.height)
       ? { width: px(r.width) || 320, height: px(r.height) || 380 }
-      : { width: isAgent ? 600 : 320, height: isAgent ? 490 : 380 };
+      : { width: isRich ? 600 : 320, height: isRich ? 490 : 380 };
     const jp = jsPanel.create({
       headerTitle: (function () {
         // Show the block's OWN icon in the header, same spot as on the block's canvas title —
@@ -1260,6 +1264,10 @@
                          field: fieldForSchema,
                          catalogFor: (t) => (CATALOG && CATALOG[t]) || null,
                          preresolve: preresolveRefs,
+                         // A bespoke panel that owns a whole property (the ingestion
+                         // pipeline JSON) needs the same write path as a field: set,
+                         // sync the canvas widget, refit, dirty, autosave.
+                         commit: commitValue,
                          addManagement: addManagementRow };
 
   ready((app) => {

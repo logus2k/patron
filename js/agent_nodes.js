@@ -304,12 +304,44 @@
       this.addOutput("out", TYPES.FLOW);
       this.addProperty("watch_path", "/watched/in");
       this.addProperty("patterns", "*");
+      // What the fired event puts on the wire. `content` is the historic default
+      // and stays so for existing bindings, but it CANNOT carry a PDF — the
+      // watcher's reader emits a "[binary file …]" marker, which looks like data
+      // downstream and fails silently. `path` is what an Ingestion block wants.
+      this.addProperty("emit", "path");
+      this.addProperty("max_content_mb", 64);
+      // Without this a document can never LEAVE a corpus: deletes fire nothing.
+      this.addProperty("on_deleted", false);
       textW(this, "watch_path");
       textW(this, "patterns");
+      comboW(this, "emit", ["path", "content"]);
       apply(this, INIT);
     }
     FileInitiator.title = "File Initiator";
     FileInitiator.desc = "Boundary source: fires the workflow when a new/changed file is detected in a folder.";
+
+    // --- Ingestion: document -> searchable corpus + knowledge graph ------------
+    function Ingestion() {
+      this.addInput("in", TYPES.FLOW);
+      this.addOutput("out", TYPES.FLOW);
+      this.addProperty("agent_url", "http://ingestion-server:8700");
+      // The whole declarative pipeline. Left EMPTY here on purpose: the real
+      // default lives in the composer catalog (blocks.py _DEFAULT_PIPELINE) and
+      // the panel seeds it on first open, so the base pipeline has exactly one
+      // source of truth.
+      this.addProperty("pipeline", "");
+      this.addProperty("judge_persona", "ingest_judge");
+      this.addProperty("judge_template", "");
+      this.addProperty("on_suspicion", "notify");
+      this.addProperty("judge_enabled", true);
+      this.addProperty("timeout_s", 1800);
+      textW(this, "agent_url");
+      comboW(this, "on_suspicion", ["notify", "suspend"]);
+      numW(this, "timeout_s");
+      apply(this, COLOR);
+    }
+    Ingestion.title = "Ingestion";
+    Ingestion.desc = "Turn a document into a searchable corpus + knowledge graph (Ingestion Agent).";
 
     // --- Web Initiator: fires when a request hits a configured route ----------
     function WebInitiator() {
@@ -577,6 +609,7 @@
       ["transform", Transform],
       ["vector_query", VectorDatabase],
       ["graph_query", GraphDatabase],
+      ["ingestion", Ingestion],
       ["data", DataBlock],
       ["composite", Composite],
       ["whatsapp", WhatsApp],
@@ -609,6 +642,7 @@
       { type: "agent", label: "Agent" },
       { type: "vector_query", label: "Vector Database" },
       { type: "graph_query", label: "Graph Database" },
+      { type: "ingestion", label: "Ingestion" },
       { type: "data", label: "Data Source" },
       { type: "transform", label: "Data Transformation", disabled: true },
       { type: "composite", label: "Workflow", disabled: true },

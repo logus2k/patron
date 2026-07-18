@@ -1205,7 +1205,7 @@
   menuBar.registerCommand("edit.duplicate", () => { if (lgcanvas.copyToClipboard) { lgcanvas.copyToClipboard(); lgcanvas.pasteFromClipboard(); scheduleSave(); } });
   // --- Insert (one command per block type → drops at view center) ---
   ["trigger", "file_initiator", "web_initiator", "stt_initiator", "console_send",
-   "agent", "vector_query", "graph_query", "transform", "composite",
+   "agent", "vector_query", "graph_query", "ingestion", "data", "transform", "composite",
    "whatsapp", "tts", "bus", "console_receive", "file_destination", "web_destination"]
     .forEach((t) => menuBar.registerCommand("insert." + t, () => insertBlock(t)));
   // --- Build ---
